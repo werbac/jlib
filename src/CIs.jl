@@ -217,7 +217,7 @@ end
 
 
 
-
+"""
 function np_val(iDict::OrderedDict)
     M = get(iDict, :M, NA)
     Mt = get(iDict, :Mt, NA)
@@ -242,3 +242,4 @@ function np_val(iDict::OrderedDict)
     one_tail = 1-(pvalue/2)
     return one_tail, two_tail
 end
+"""

@@ -106,6 +106,13 @@ function readModels(fname::String)
 end
 
 
+function read_orig(root::String)
+    df_data = readtable(root*"/orig.csv",header=false);
+    df_h = readtable(root*"/origHead.csv",header=false);  
+    names!(df_data, convert(Array{Symbol}, df_h[:x1]) )
+    return df_data
+end
+
 dict2json(d::Dict) = JSON.json(d) 
 savejson(fname::String, j::String) = open(fname,"w") do f write(f,j) end
 readjson(fname::String) = JSON.parsefile(fname)

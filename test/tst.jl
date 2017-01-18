@@ -102,12 +102,13 @@ const cfgDefaults=OrderedDict( :P2_Competitor => true
 root = !isdefined(:root) ? pwd() : root
 cfgDefaults = mergeDict(dict_Sym(read_cfg(root)),cfgDefaults)
 
-function loadDF()
-    df_data = readtable(root*"/orig.csv",header=false);
-    df_h = readtable(root*"/origHead.csv",header=false);  
-    names!(df_data, convert(Array{Symbol}, df_h[:x1]) )
-end
-df_in=loadDF()
+#function loadDF()
+#    df_data = readtable(root*"/orig.csv",header=false);
+#    df_h = readtable(root*"/origHead.csv",header=false);  
+#    names!(df_data, convert(Array{Symbol}, df_h[:x1]) )
+#end
+#df_in=loadDF()
+df_in=read_orig(root
 
 function Pre_out(df_in::DataFrame)
      df_cat_pre = df_in[df_in[:Buyer_Pre_P0] .==1 , [:Prd_0_Net_Pr_PRE,:experian_id]]
@@ -565,13 +566,8 @@ save_modelsDict(root, modelsDict)
     
     
 # ***************** MODELS *******************************************************************
-
-    
-    
 modelsDict = read_modelsDict(root) #modelsDict = readModels(jmod_fname) 
                 
-
-
 @everywhere function runGlm(root::String, modelname::Symbol, ranef::Symbol=:empty)
     println("Loding data : ")
     dfd = read_dfd(root) #dfd = readtable(mod_fname,header=true);
@@ -599,8 +595,6 @@ end
     end
 end        
         
-                
-
 @everywhere function runGlmm(root::String, modelname::Symbol, ranef::Symbol=:empty, runθ::Bool=true)
     println("Loding data : Glmm : ",modelname," ~~~ ",ranef)
     dfd = read_dfd(root)   #dfd = readtable(mod_fname,header=true);
@@ -639,9 +633,36 @@ end
     end
 end
     
+dx=OrderedDict()  # defaults to empty - so that consolidate will work with seq or MP
+function runModels(root::String, modelsDict::Dict)
+    dfd = read_dfd(root) #dfd = readtable(mod_fname,header=true);
+    poolit!(dfd,modelsDict[:factors])
+    res = OrderedDict()
+    q = Symbol[]
+    cnt=0
+    for (k,v) in OrderedDict(m=>modelsDict[m][:raneff] for m in [:ipen,:idolocc,:iocc]) 
+         for r in v push!(q,k); push!(q,r); cnt=cnt+1 end 
+    end
+    x=reshape(q, (2,cnt))
+    ml = permutedims(x, [2, 1])
+    m=:empty
+    for i in 1:length(ml[:,1]) 
+        if m != ml[i,:][1]
+            gr=Symbol("glm_"*string(ml[i,:][1]))
+            res[gr] = runGlm(dfd,modelsDict[ml[i,:][1]]) #res[gr] = runGlm(mod_fname, jmod_fname, ml[i,:][1])
+            m=ml[i,:][1]
+        end
+        r=Symbol("glmm_"*string(ml[i,:][1])*"_"*string(ml[i,:][2]))
+        res[r] = runGlmm(dfd,modelsDict[m], [ml[i,:][2]], true)   #res[r] = runGlmm(mod_fname, jmod_fname, ml[i,:][1], ml[i,:][2]) 
+        covg=Symbol("covglm_"*string(ml[i,:][1])*"_"*string(ml[i,:][2]))
+        res[covg] = runGlm(dfd,modelsDict[m], ml[i,:][2])   #res[covg] = runGlm(mod_fname, jmod_fname, ml[i,:][1], ml[i,:][2]) 
+    end 
+    return res                        
+end         
+#dx = runModels(root,modelsDict)       
     
-
-                           
+    
+    
 function runModels( root::String, modelsDict::Dict)
    @swarm :glm_ipen runGlm(root, :ipen)
    sleep(25)
@@ -706,11 +727,11 @@ function consolidateResults(modelsDict::Dict,dx::OrderedDict=OrderedDict())
     end
     return sdf
 end     
-dfx = consolidateResults(modelsDict)  
+dfx = consolidateResults(modelsDict,dx)  
 save_dfx(root,dfx)      #writetable(root*"/campaign.csv", dfx)                      
 
     
-# **************************************************************************************************************************
+# ************************************* SCORING*************************************************************************************
         
 modelsDict = read_modelsDict(root)  
 modelsDict[:occ]=modelsDict[:iocc]; delete!(modelsDict,:iocc)
@@ -1237,6 +1258,148 @@ end
 genDHHMeans(dfx)
 
 
+        
+        
+# ************************************* OPT ****************************************************************************************    
+@everywhere function CIOx(iDict::OrderedDict)
+    v_ttl=2
+    M = get(iDict,:M,NA)
+    Mt = get(iDict,:Mt,NA)
+    Mc = get(iDict,:Mc,NA)
+    N = get(iDict,:N,NA)
+    Nt = get(iDict,:Mt,NA)
+    Nc = get(iDict,:Nc,NA)
+    B1 = get(iDict,:B1,NA)
+    B2 = get(iDict,:B2,NA)
+    B3 = get(iDict,:B3,NA)
+    SE1 = get(iDict,:SE1,NA)
+    SE2 = get(iDict,:SE2,NA)
+    SE3 = get(iDict,:SE3,NA)
+    o_mean_score0 = get(iDict,:o_mean_score0,NA)
+    o_mean_score1 = get(iDict,:o_mean_score1,NA)
+    y_mean_score0 = get(iDict,:y_mean_score0,NA)
+    y_mean_score1 = get(iDict,:y_mean_score1,NA)
+    p_mean_score0 = get(iDict,:p_mean_score0,NA)
+    p_mean_score1 =get(iDict,:p_mean_score1,NA)
+    # ****** PValue ******
+    SEsq=sqrt(SE1^2+SE2^2+SE3^2)
+    Bsum=B1+B2+B3
+    m=nothing
+    m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=v_ttl))  
+    @variable(m, Bocc <= B1)
+    @variable(m, Bdolocc <= B2)
+    @variable(m, Bpen <= B3)     
+    @objective(m, Max, (((Bocc+Bpen+Bdolocc)-Bsum)/SEsq ))
+    @NLconstraint(m, 0.00000 <= ((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))
+	                           * ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))
+	                           * ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
+	                             )
+	                           -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))
+	                           *((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))
+	                           *((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
+	                             )
+	                          ) 
+	               <= 0.00001
+                    )
+    status = solve(m)
+    zvalue=getobjectivevalue(m)
+    iDict[:pval] =2.0 * ccdf(Normal(), abs(zvalue))
+    println("z-value: ", string(zvalue)," --> p-value: ",string(iDict[:pval]))         
+    # ****** UB-LB ******
+    o_SE0 = get(iDict, :o_SE0, 0)
+    y_SE0 = get(iDict, :y_SE0, 0)
+    p_SE0 = get(iDict, :p_SE0, 0)
+    o_B0 = get(iDict, :o_B0, 0)
+    y_B0 = get(iDict, :y_B0, 0)
+    p_B0 = get(iDict, :p_B0, 0)        
+    SEsq=sqrt(SE1^2+SE2^2+SE3^2+o_SE0^2+y_SE0^2+p_SE0^2)        
+    Bsum=(B1+B2+B3)-(o_B0+y_B0+p_B0)        
+    ZDict = Dict("onetail_80_pct_intrvl" => 0.84 ,"onetail_90_pct_intrvl" => 1.28, "twotail_80_pct_intrvl" => 1.28, "twotail_90_pct_intrvl" => 1.65)
+    AccArr= [ 0.000000001,0.00000001,0.0000001,0.000001,0.00001,0.0001,0.001,0.01]
+    ftxt="!!!!!!!!!!!!!!!!!!FAILED!!!!!!!!!!!!!!!!!!!!!!!!"
+    failmsg(b::String,interval::String,meta::String) = println(ftxt*"   ",b," ",interval," := ",meta," == "*ftxt) 
+    for (zscore_key,zscore) in  ZDict  
+        # **********************  LB  ***************************
+        pref="LB "*zscore_key[1:10]*" ("*iDict[:metakey]"):= "
+        preflen=length(pref)
+        dkey=Symbol(zscore_key*"_lb")
+        for iAcc in AccArr
+           print(pref," - "*string(iAcc)*", ",iDict)       ;pref=lpad("", preflen, " ")
+           m=nothing
+           m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=v_ttl))               
+           ztot = Bsum-(zscore*SEsq)
+           @variable(m, Bocc <= (B1-o_B0))
+           @variable(m, Bdolocc <= (B2-y_B0))
+           @variable(m, Bpen <= (B3-p_B0))
+           @NLobjective(m, Min, ((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))* 
+                                         ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))*
+                                         ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
+                                         )
+                                         -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))*
+                                           ((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))*
+                                           ((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
+                                           )
+                                         )
+                                      )
+           @constraint(m, (0.000000000<= (((Bocc+Bpen+Bdolocc)-ztot))<= iAcc)) 
+           status = solve(m)
+           mval=getobjectivevalue(m)
+           println("lb_... ",mval)
+           mval_out=mval/(o_mean_score0*y_mean_score0*p_mean_score0)
+           if (status==:Optimal)&(mval_out!=Inf)&(mval_out!=-Inf)&(mval!=Inf)*(mval!=-Inf)
+               iDict[dkey] = mval_out
+               println("            : Confidence Interval : ", string(iDict[dkey]) )
+               break      
+           else
+               iDict[dkey] = "error"
+           end
+        end
+        if (iDict[dkey] == "error") 
+             failmsg("LB",zscore_key[1:10],iDict[:metakey])
+        end
+        # **********************  UB  ***************************        
+        pref="UB "*zscore_key[1:10]*" ("*iDict[:metakey]"):= "   
+        dkey=Symbol(zscore_key*"_ub")
+        for iAcc in AccArr
+           print(pref," - "*string(iAcc)*", ")       ;pref=lpad("", preflen, " ")
+           m=nothing
+           m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=v_ttl))  
+           ztot = Bsum+(zscore*SEsq)
+           @variable(m, Bocc >= (B1-o_B0))
+           @variable(m, Bdolocc >= (B2-y_B0))
+           @variable(m, Bpen >= (B3-p_B0))
+           @NLobjective(m, Max, ( (((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))
+                                        * ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))
+                                        * ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
+                                         )
+                                        -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))
+                                         *((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))
+                                         *((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
+                                         )
+                                      )
+                              )
+           @constraint(m, (0.0000<= (((Bocc+Bpen+Bdolocc)-ztot))<= iAcc)) 
+           status = solve(m)
+           mval=getobjectivevalue(m)
+           println("ub_... ",mval)
+           mval_out=mval/(o_mean_score0*y_mean_score0*p_mean_score0)
+           if (status==:Optimal)&(mval_out!=Inf)&(mval_out!=-Inf)&(mval!=Inf)*(mval!=-Inf)
+               iDict[dkey] = mval_out
+               println("            : Confidence Interval : ", string(iDict[dkey]) )
+               break      
+           else
+               iDict[dkey] = "error"
+           end
+        end
+        if (iDict[dkey] == "error") 
+             failmsg("UB",zscore_key[1:10],iDict[:metakey])
+        end
+    end
+    return iDict
+end                
+# -------------------------------------------------------------------------------------------------------------------        
+        
+        
 
 function collectModels(dfx::DataFrame,modelType::String,ranef::String="",level::String="")
     mDict = OrderedDict()
@@ -1319,7 +1482,6 @@ end
 #ConfidenceIntervals(dfx)
 #dfx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
 #dfx[(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),[:model,:adj_dod_effct,:onetail_80_pct_intrvl_lb,:onetail_80_pct_intrvl_ub]]
-
  
             
 @everywhere function MP_collectModels(dfx::DataFrame, modelType::String,ranef::String="",level::String="") 
@@ -1368,8 +1530,9 @@ end
     mDict[:p_mean_score1]=p[:adj_mean_score1][1]     
     println("Running CI for : $ranef : $level")
     mDict[:metakey] = ranef*"~"*level        
-    calcPValue_Opt(mDict)
-    CIs_O(mDict)              
+    #calcPValue_Opt(mDict)
+    #CIs_O(mDict)
+    CIOx(mDict)
     return mDict
 end
 
@@ -1385,8 +1548,8 @@ function MP_ConfidenceIntervals(dfx::DataFrame)
     sleep(20)
     while !iscompletew() println("Not Complete yet!"); sleep(5); end 
     mDict = takew(:total)
-    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:onetail_pval] = mDict[:onetail_pval]*100
-    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:twotail_pval] = mDict[:twotail_pval]*100
+#    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:onetail_pval] = mDict[:onetail_pval]*100
+#    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:twotail_pval] = mDict[:twotail_pval]*100
     dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:pval] = mDict[:pval]
     for k in keys(ZDict)
         dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),Symbol(k*"_lb")] = mDict[Symbol(k*"_lb")]*100
