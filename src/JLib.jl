@@ -3,7 +3,7 @@ isdefined(Base, :__precompile__) && __precompile__()
 #__precompile__()
 
 
-module StatLib
+module JLib
 
 using JSON, Compat, DataArrays, GLM, DataFrames, Distributions, NLopt, Showoff, StatsBase, DataStructures, StatsFuns, JuMP, MixedModels, NamedArrays, NLsolve
 #using JSON, Requests, HttpParser

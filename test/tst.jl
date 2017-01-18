@@ -303,6 +303,29 @@ function MatchMe(dfd::DataFrame,cfg::OrderedDict)
     rows2remove = setdiff(dfd[dfd[:isO].==false, :panid],dfd_sample[:panid])
     #dfd[findin(dfd[:panid],rows2remove),:whyO]="NoMatch"
     dfd[findin(dfd[:panid],rows2remove),:isO]=true 
+        
+
+#    --------------Matching - pre-post ------------------
+"""
+    dfp=join(by(dfd[(dfd[:isO].==false),:],[:group,:Buyer_Pos_P1], df->DataFrame(cnt=size(df,1))) ,  
+             by(dfd[(dfd[:isO].==false),:],:group,df->DataFrame(tot=size(df,1)))
+             , on=:group 
+            )  
+    dfp[:prop] = dfp[:cnt]./dfp[:tot]
+    if dfp[(dfp[:group].==1)&(dfp[:Buyer_Pos_P1].==1),:prop][1] < dfp[(dfp[:group].==0)&(dfp[:Buyer_Pos_P1].==1),:prop][1]  
+            
+        scnt = Int( round(( dfp[(dfp[:group].==0)&(dfp[:Buyer_Pos_P1].==0),:cnt][1]*dfp[(dfp[:group].==1)&(dfp[:Buyer_Pos_P1].==1),:prop][1] ) / (1-dfp[(dfp[:group].==1)&(dfp[:Buyer_Pos_P1].==1),:prop][1])  ))
+        smp = sample(dfd[(dfd[:isO].==false)&(dfd[:Buyer_Pos_P1].==1)&(dfd[:group].==0),:panid], scnt , replace=false)
+       
+        oliers = setdiff(dfd[(dfd[:isO].==false)&(dfd[:Buyer_Pos_P1].==1)&(dfd[:group].==0),:panid],smp)
+        
+        dfd[findin(dfd[:panid], setdiff(dfd[(dfd[:isO].==false)&(dfd[:Buyer_Pos_P1].==1)&(dfd[:group].==0),:panid],smp)),:isO] =true
+   end
+"""
+        # ---- end matching ------------
+        
+        
+        
     return dfd[dfd[:isO].==false, : ]  #[setdiff(names(dfd),[:isO,:whyO])] 
 end
 dfd = MatchMe(dfd,cfg)
@@ -537,7 +560,14 @@ save_dfd(root, dfd[(dfd[:iso].==false),cols] )
 save_modelsDict(root, modelsDict)
     
     
-# ************************************************************************************
+    
+    
+    
+    
+# ***************** MODELS *******************************************************************
+
+    
+    
 modelsDict = read_modelsDict(root) #modelsDict = readModels(jmod_fname) 
                 
 

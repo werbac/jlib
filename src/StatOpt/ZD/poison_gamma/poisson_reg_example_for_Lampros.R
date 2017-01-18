@@ -1,0 +1,41 @@
+str_path <- "C:\\Users\\mdzhd\\Documents\\Bayesian_Approach_with_Lampros\\"
+
+myd <- read.csv( paste0( str_path, "poisson_regression_ex2.csv" ) )
+
+myglm <- glm( y ~ x1 + x2 + x3, data = myd, family = poisson )
+
+x <- as.matrix( myd[, -c(1)] )
+y <- as.matrix( myd[, 1] )
+
+NegLogLike <- function( beta )
+{
+	xbeta <- x %*% beta
+	Li <- exp( xbeta ) - y * xbeta
+	sum( Li )
+}
+
+beta_initial <- as.matrix( rep( 0, ncol( x ) ), ncol(x), 1 )
+
+myoptim <- optim( beta_initial, f = NegLogLike, g = NULL, method = "BFGS", hessian = TRUE)
+
+var_cov_m <- solve( myoptim$hessian )
+
+beta_se <- sqrt( diag( var_cov_m ) )
+
+zvalue <- myoptim$par / beta_se
+
+pvalue <- 2 * ( 1 - pnorm(abs( zvalue ) ) )
+
+coeff_outputs <- cbind( myoptim$par, beta_se, zvalue, round( pvalue, 6 ) )
+
+colnames( coeff_outputs ) <- c( "Estimates", "Std. Error", "z value", "Pr(>|z|)" )
+rownames( coeff_outputs ) <- c()
+
+print( coeff_outputs )
+summary( myglm )$coefficients
+
+
+
+
+
+
