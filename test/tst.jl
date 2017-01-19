@@ -1331,21 +1331,30 @@ genDHHMeans(dfx)
            @variable(m, Bocc <= (B1-o_B0))
            @variable(m, Bdolocc <= (B2-y_B0))
            @variable(m, Bpen <= (B3-p_B0))
-           @NLobjective(m, Min, ((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))* 
+           #@NLobjective(m, Min, ((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))* 
+           #                             ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))*
+           #                              ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
+            #                             )
+            #                             -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))*
+            #                               ((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))*
+            #                               ((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
+            #                               )
+            #                             )
+            #                          )
+           @NLobjective(m, Min, (((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))*
                                          ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))*
-                                         ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
-                                         )
-                                         -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))*
+                                         ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M))))
+                                         /
+                                         (((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))*
                                            ((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))*
-                                           ((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
-                                           )
-                                         )
-                                      )
+                                           ((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))))-1)                     
+                        )
            @constraint(m, (0.000000000<= (((Bocc+Bpen+Bdolocc)-ztot))<= iAcc)) 
            status = solve(m)
            mval=getobjectivevalue(m)
            println("lb_... ",mval)
-           mval_out=mval/(o_mean_score0*y_mean_score0*p_mean_score0)
+           #mval_out=mval/(o_mean_score0*y_mean_score0*p_mean_score0)
+           mval_out=mval
            if (status==:Optimal)&(mval_out!=Inf)&(mval_out!=-Inf)&(mval!=Inf)*(mval!=-Inf)
                iDict[dkey] = mval_out
                println("            : Confidence Interval : ", string(iDict[dkey]) )
@@ -1368,21 +1377,33 @@ genDHHMeans(dfx)
            @variable(m, Bocc >= (B1-o_B0))
            @variable(m, Bdolocc >= (B2-y_B0))
            @variable(m, Bpen >= (B3-p_B0))
-           @NLobjective(m, Max, ( (((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))
-                                        * ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))
-                                        * ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
-                                         )
-                                        -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))
-                                         *((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))
-                                         *((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
-                                         )
-                                      )
-                              )
+           #@NLobjective(m, Max, ( (((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))
+            #                            * ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))
+            #                            * ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
+            #                             )
+            #                            -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))
+            #                             *((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))
+            #                             *((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
+            #                             )
+            #                          )
+            #                  )
+            @NLobjective(m, Max, (((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))*
+                                         ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))*
+                                         ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M))))
+                                         /
+                                         (((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))*
+                                           ((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))*
+                                           ((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M))))
+                                  )-1
+                                 )                     
+                         )
+                        
            @constraint(m, (0.0000<= (((Bocc+Bpen+Bdolocc)-ztot))<= iAcc)) 
            status = solve(m)
            mval=getobjectivevalue(m)
            println("ub_... ",mval)
-           mval_out=mval/(o_mean_score0*y_mean_score0*p_mean_score0)
+           #mval_out=mval/(o_mean_score0*y_mean_score0*p_mean_score0)
+           mval_out=mval             
            if (status==:Optimal)&(mval_out!=Inf)&(mval_out!=-Inf)&(mval!=Inf)*(mval!=-Inf)
                iDict[dkey] = mval_out
                println("            : Confidence Interval : ", string(iDict[dkey]) )
@@ -1538,11 +1559,11 @@ end
 
 
 function MP_ConfidenceIntervals(dfx::DataFrame)           
-                @swarm :total MP_collectModels(dfx, "GLM")
+    @swarm :total MP_collectModels(dfx, "GLM")
     for ranef in unique(dfx[(dfx[:modelType].=="GLMM"),:ranef])
         for level in unique(dfx[(dfx[:modelType].=="GLMM")&(dfx[:ranef].==ranef),:parameter])
                 k = Symbol(ranef*"~"*level)
-                @swarm k  MP_collectModels(dfx, "GLMM",ranef,level)
+                @swarm k MP_collectModels(dfx, "GLMM",ranef,level)
         end
     end
     sleep(20)
