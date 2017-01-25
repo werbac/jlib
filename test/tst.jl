@@ -771,7 +771,7 @@ dfx[:cnt_expsd_hh]=0
 dfx[:cnt_impressions]=0
 dfx[:adj_pval]=0.0
 dfx[:twotail_pval_to_campaign]=0.0
-dfx[:onetail_pval_to_campaign]=0.0
+dfx[:onetail_pval_to_campaign]=0.0 
 # ************ EQUATIONS COLS - Uncomment to have them populated *****************
 #dfx[:unadj_mean_score0_eq] = ""
 #dfx[:unadj_mean_score1_eq] = ""
