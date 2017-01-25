@@ -108,7 +108,7 @@ cfgDefaults = mergeDict(dict_Sym(read_cfg(root)),cfgDefaults)
 #    names!(df_data, convert(Array{Symbol}, df_h[:x1]) )
 #end
 #df_in=loadDF()
-df_in=read_orig(root
+df_in=read_orig(root)
 
 function Pre_out(df_in::DataFrame)
      df_cat_pre = df_in[df_in[:Buyer_Pre_P0] .==1 , [:Prd_0_Net_Pr_PRE,:experian_id]]
@@ -429,6 +429,8 @@ function featureSelection(dfd::DataFrame, m::Dict)
     finalvars = convert(Array{Symbol},vcat(finalvars,[:group]) )
     return finalvars
 end
+    
+    
 
 factor_cols=vcat( [ cfg[:proscore], :group, :panid], cfg[:allrandoms] )
 for c in setdiff(factor_cols,[:panid, cfg[:proscore]]) #cfg[:random_campaigns]
@@ -565,7 +567,7 @@ save_modelsDict(root, modelsDict)
     
     
     
-# ***************** MODELS *******************************************************************
+# ******************************* MODELS **********************************************************
 modelsDict = read_modelsDict(root) #modelsDict = readModels(jmod_fname) 
                 
 @everywhere function runGlm(root::String, modelname::Symbol, ranef::Symbol=:empty)
@@ -1190,10 +1192,10 @@ function ConfIntrvl()
         if runCI
             ZDict = Dict("onetail_80_pct_intrvl" => 0.84 ,"onetail_90_pct_intrvl" => 1.28, "twotail_80_pct_intrvl" => 1.28, "twotail_90_pct_intrvl" => 1.65)
             for (zscore_key, zscore) in ZDict    
-                Lb_pre = (   (mean_score1*(Mt/M))    -   (mean_score1*exp(-(B-(SE*zscore)))*(Mt/M))   )  +  ## ------------ Lower Bound ---------------
+                Lb_pre = (   (mean_score1*(Mt/M))    -   (mean_score1*exp(-(B-(SE*zscore)))*(Mt/M))   )  +  ## ------ Lower Bound --------
                          (   (mean_score0*exp((B-(SE*zscore)))*(Mc/M))    -   (mean_score0*(Mc/M))    )
                 row[Symbol(zscore_key*"_lb")] = ( Lb_pre/mean_score0 ) * 100
-                Ub_pre =  (     ( mean_score1*(Mt/M) )   -   ( mean_score1*exp(-(B+(SE*zscore)))*(Mt/M))   )  +  ## ------------ Upper Bound ---------------
+                Ub_pre =  (     ( mean_score1*(Mt/M) )   -   ( mean_score1*exp(-(B+(SE*zscore)))*(Mt/M))   )  +  ## ------ Upper Bound -------
                           (     ( mean_score0*exp((B+(SE*zscore)))*(Mc/M))  - (mean_score0*(Mc/M) )   )
                 row[Symbol(zscore_key*"_ub")] = ( Ub_pre/mean_score0 ) * 100   
                 println("RAND CI $zscore_key ($zscore) LB:",row[Symbol(zscore_key*"_lb")]," ~~ UB : ", row[Symbol(zscore_key*"_ub")])
@@ -1588,8 +1590,52 @@ function MP_ConfidenceIntervals(dfx::DataFrame)
     end    
 end       
 MP_ConfidenceIntervals(dfx)          
-         
-            
+    
+
+  
+function pvalues2Campaign(dfx::DataFrame)
+    for model in ["occ","dolocc","pen"]       
+        Bt = dfx[(dfx[:modelType].=="GLM")&(dfx[:model].==model)&(dfx[:parameter].=="group"),:coef][1]  
+        Errt = dfx[(dfx[:modelType].=="GLM")&(dfx[:model].==model)&(dfx[:parameter].=="group"),:stderr][1]
+        for row in eachrow(dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].==model),:])
+            Bb = row[:adj_coef][1]
+            Errb = row[:adj_stderr][1]
+            t= (Bb-Bt) / sqrt(   (  ((Errb*sqrt(1000 ))^2) /1000   ) 
+                               + (  ((Errt*sqrt(10000))^2)/10000  ) 
+                             )
+            pval = 2 * cdf(TDist(1000),abs(t))    #cdf(TDist(5.3900745416769-1),-0.7687842353483888)*2
+            dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].==model)&(dfx[:parameter].==row[:parameter]),:twotail_pval_to_campaign] = (1-pval) * 100
+            dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].==model)&(dfx[:parameter].==row[:parameter]),:onetail_pval_to_campaign] = (1-(pval/2)) * 100
+        end  
+    end            
+    for model in ["dolhh"]
+        ot = dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="occ")&(dfx[:parameter].=="group"),:coef][1] 
+        yt = dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="dolocc")&(dfx[:parameter].=="group"),:coef][1]
+        pt = dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="pen")&(dfx[:parameter].=="group"),:coef][1]            
+        Bt = ot*yt*pt
+        ote = dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="occ")&(dfx[:parameter].=="group"),:stderr][1] 
+        yte = dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="dolocc")&(dfx[:parameter].=="group"),:stderr][1]
+        pte = dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="pen")&(dfx[:parameter].=="group"),:stderr][1]  
+        Errt = sqrt(ote^2+yte^2+pte^2)
+        for row in eachrow(dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].==model),:])
+            ob = dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="occ")&(dfx[:parameter].==row[:parameter]),:coef][1] 
+            yb = dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="dolocc")&(dfx[:parameter].==row[:parameter]),:coef][1]
+            pb = dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="pen")&(dfx[:parameter].==row[:parameter]),:coef][1]            
+            Bb = ob*yb*pb
+            obe = dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="occ")&(dfx[:parameter].==row[:parameter]),:stderr][1] 
+            ybe = dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="dolocc")&(dfx[:parameter].==row[:parameter]),:stderr][1]
+            pbe = dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="pen")&(dfx[:parameter].==row[:parameter]),:stderr][1]  
+            Errb = sqrt(obe^2+ybe^2+pbe^2)
+            t= (Bb-Bt) / sqrt(   (  ((Errb*sqrt(1000 ))^2) /1000   ) 
+                               + (  ((Errt*sqrt(10000))^2)/10000  ) 
+                             )
+                        pval = 2 * cdf(TDist(1000),abs(t))    #cdf(TDist(5.3900745416769-1),-0.7687842353483888)*2
+            dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].==model)&(dfx[:parameter].==row[:parameter]),:twotail_pval_to_campaign] = (1-pval) * 100
+            dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].==model)&(dfx[:parameter].==row[:parameter]),:onetail_pval_to_campaign] = (1-(pval/2)) * 100
+        end  
+    end         
+end
+pvalues2Campaign(dfx)
         
 
 function genReport(dfx::DataFrame)
@@ -1604,6 +1650,7 @@ function genReport(dfx::DataFrame)
           :TWOTAIL_80_PCT_INTRVL_UB,:TWOTAIL_80_PCT_INTRVL_LB,:TWOTAIL_90_PCT_INTRVL_UB,:TWOTAIL_90_PCT_INTRVL_LB,
           :CNT_IMPRESSIONS,:TWOTAIL_PVAL_to_Campaign,:ONETAIL_PVAL_to_Campaign,:CNT_Model_HH
         ]
+    #--
     dfx[isnan(dfx[:unadj_avg_expsd_hh_pre]),:unadj_avg_expsd_hh_pre] = 0.0  # Sometime there are no records for subset
     dfx[isnan(dfx[:unadj_avg_expsd_hh_pst]),:unadj_avg_expsd_hh_pst] = 0.0  # Sometime there are no records for subset
     dfx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
@@ -1618,9 +1665,9 @@ function genReport(dfx::DataFrame)
     dfx[:onetail_pval] = (1-(dfx[:pval] ./ 2)) * 100  # sdf[:onetail_pval_raw] = (1-(sdf[:Praw] ./ 2)) * 100
     dfx[:twotail_pval] = (1-dfx[:pval]) * 100         # sdf[:twotail_pval_raw] = (1-sdf[:Praw]) * 100
     dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"),:adj_pval] = 2.0 * ccdf(Normal(),abs(dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"),:adj_coef] ./ dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"),:adj_stderr]))
-    dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"), :onetail_pval_to_campaign] =  (1-(dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"), :adj_pval] ./ 2) ) * 100
-    dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"), :twotail_pval_to_campaign] =  (1-dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"), :adj_pval] ) * 100
-
+    #dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"), :onetail_pval_to_campaign] =  (1-(dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"), :adj_pval] ./ 2) ) * 100
+    #dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"), :twotail_pval_to_campaign] =  (1-dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].!="dolhh"), :adj_pval] ) * 100
+#--
     dfx[:empty] = ""
     dfx[:orderModel] = map(x-> x=="pen"? 1 : x=="occ" ? 2 : x=="dolocc" ? 3 : x=="dolhh" ? 4 : 9999 ,dfx[:model])
     dfx[:orderFixedRand] = map(x-> x=="GLM"? 1 : 9999 ,dfx[:modelType])
@@ -1636,13 +1683,89 @@ function genReport(dfx::DataFrame)
         ]]
     names!(dfr,rep)
     
-    dfr[(dfr[:MODEL_DESC].=="Total Campaign")|(dfr[:dependent_variable].=="dolhh"),:TWOTAIL_PVAL_to_Campaign] = NaN
-    dfr[(dfr[:MODEL_DESC].=="Total Campaign")|(dfr[:dependent_variable].=="dolhh"),:ONETAIL_PVAL_to_Campaign] = NaN
+    #dfr[(dfr[:MODEL_DESC].=="Total Campaign")|(dfr[:dependent_variable].=="dolhh"),:TWOTAIL_PVAL_to_Campaign] = NaN
+    #dfr[(dfr[:MODEL_DESC].=="Total Campaign")|(dfr[:dependent_variable].=="dolhh"),:ONETAIL_PVAL_to_Campaign] = NaN
+    dfr[(dfr[:MODEL_DESC].=="Total Campaign"),:TWOTAIL_PVAL_to_Campaign] = NaN
+    dfr[(dfr[:MODEL_DESC].=="Total Campaign"),:ONETAIL_PVAL_to_Campaign] = NaN
     dfr[(dfr[:dependent_variable].!="dolhh"),:CNT_EXPSD_HH] = NA
     dfr[(dfr[:dependent_variable].!="dolhh"),:CNT_IMPRESSIONS] = NA
     return dfr
 end
 dfr = genReport(dfx)
 save_dfr(root, dfr)
+
+
+            
+            
+            
+            
+            
+            
+       
+            
+            
+# *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+# *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*- TESt CIs -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+# *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+            
+function ConfIntrvl()
+    for row in eachrow(dfx)
+        runCI = false
+        if (row[:modelType] == "GLM") & (row[:parameter]=="group")
+            runCI = true
+            if row[:model]=="pen"
+                adj_dod_effct =  ((row[:adj_mean_score1] - row[:adj_mean_score0]) / row[:adj_mean_score0] ) *100
+                row[:coef] = log((adj_dod_effct/100)+1)
+                row[:pval] = 2.0 * ccdf(Normal(), abs(row[:coef]/row[:stderr]))
+            end
+            mean_score0=row[:unadj_mean_score0]  # TOTAL Confidence Intervals  # use unadj
+            mean_score1=row[:unadj_mean_score1] 
+            B=row[:coef]
+            SE=row[:stderr] 
+            Mt = row[:model]=="pen" ? row[:Nt] : row[:Mt]
+            Mc = row[:model]=="pen" ? row[:Nc] : row[:Mc]
+            M = row[:model]=="pen" ? row[:N] : row[:M]
+            println("Total: ",mean_score0,"...",mean_score1," : ",B," ~ ",SE," ~ ",Mt," ~ ",Mc," ~ ",M)
+            #ex="(($mean_score1*($Mt/$M))-($mean_score1*exp(-($B-($SE*\$z)))*($Mt/$M)))+(($mean_score0*exp(($B-($SE*\$z)))*($Mc/$M))-($mean_score0*($Mc/$M)))" 
+            #println("EX ",row[:model],": ",ex)  #,"   ~~~   ", eval(parse(ex)))
+        elseif row[:modelType]=="GLMM"
+            runCI = true
+            if row[:model]=="pen"
+                adj_dod_effct =  ((row[:adj_mean_score1] - row[:adj_mean_score0]) / row[:adj_mean_score0] ) *100
+                row[:adj_coef] = log((adj_dod_effct/100)+1)
+                row[:pval] = 2.0 * ccdf(Normal(), abs(row[:adj_coef]/row[:adj_stderr]))
+            end
+            mean_score0=row[:adj_mean_score0] #RANDOM Confidence Intervals  # use adj
+            mean_score1=row[:adj_mean_score1]
+            B=row[:adj_coef]
+            SE=row[:adj_stderr]
+            Mt = row[:model]=="pen" ? row[:Nt] : row[:Mt]
+            Mc = row[:model]=="pen" ? row[:Nc] : row[:Mc]
+            M = row[:model]=="pen" ? row[:N] : row[:M]
+            println("Random: ",mean_score0,"...",mean_score1," : ",row[:ranef],"_",row[:parameter]," ~ ",B," ~ ",SE," ~ ",Mt," ~ ",Mc," ~ ",M)
+        end
+        if runCI
+            ZDict = Dict("onetail_80_pct_intrvl" => 0.84 ,"onetail_90_pct_intrvl" => 1.28, "twotail_80_pct_intrvl" => 1.28, "twotail_90_pct_intrvl" => 1.65)
+            for (zscore_key, zscore) in ZDict   
+                Bplus=+(SE*zscore)  #B+(SE*zscore) 
+                Bminus=-(SE*zscore) #B-(SE*zscore)
+                score0=mean_score0*(Mc/M)
+                score1=mean_score1*(Mt/M)
+                Lb_pre = ( score1 - (score1*exp(-( Bminus )) ) )  +  ## ------ Lower Bound --------
+                         ( (score0*exp(( Bminus )) )  -  score0    )
+                row[Symbol(zscore_key*"_lb")] = ( Lb_pre/mean_score0 ) * 100
+                Ub_pre =  (  score1 - ( score1*exp(-(Bplus)) )   )  +  ## ------ Upper Bound -------
+                          (  ( score0*exp(Bplus) - score0) )
+                row[Symbol(zscore_key*"_ub")] = ( Ub_pre/mean_score0 ) * 100   
+                println("RAND CI $zscore_key ($zscore) LB:",row[Symbol(zscore_key*"_lb")]," ~~ UB : ", row[Symbol(zscore_key*"_ub")])
+            end            
+        end
+    end
+end
+ConfIntrvl()
+dfx[:adj_dod_effct] =  ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
+dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="occ")&(dfx[:ranef].=="creative_theme")&(dfx[:parameter].=="Halloween"),[:adj_mean_score0,:adj_mean_score1,:Mt,:Mc,:N,:Nt,:Nc,:adj_coef,:adj_stderr,:adj_dod_effct,:onetail_80_pct_intrvl_lb,:onetail_80_pct_intrvl_ub]]
+
+dfx[(dfx[:adj_dod_effct].<dfx[:onetail_80_pct_intrvl_lb])|(dfx[:adj_dod_effct].>dfx[:onetail_80_pct_intrvl_ub]),[:adj_mean_score0,:adj_mean_score1,:Mt,:Mc,:N,:Nt,:Nc,:adj_coef,:adj_stderr,:adj_dod_effct,:onetail_80_pct_intrvl_lb,:onetail_80_pct_intrvl_ub]]
 
 
