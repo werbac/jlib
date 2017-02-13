@@ -1,0 +1,17 @@
+[W 15:35:03.675 LabApp] Unrecognized JSON config file version, assuming version 1
+[I 15:35:03.836 LabApp] JupyterLab alpha preview extension loaded from /mnt/resource/analytics/anaconda3/lib/python3.5/site-packages/jupyterlab
+[I 15:35:03.840 LabApp] Serving notebooks from local directory: /home/iriadmin/g/JLib/notebooks
+[I 15:35:03.840 LabApp] 0 active kernels 
+[I 15:35:03.840 LabApp] The Jupyter Notebook is running at: http://10.63.36.18:9191/
+[I 15:35:03.840 LabApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[W 15:35:03.927 LabApp] 404 GET /api/kernels/1b1dcab2-e20b-419c-8355-d0beda7ac9da/channels?session_id=00ec08f58cd132d35b5bd1ba6779214c&token=undefined (10.106.224.160): Kernel does not exist: 1b1dcab2-e20b-419c-8355-d0beda7ac9da
+[W 15:35:03.953 LabApp] 404 GET /api/kernels/1b1dcab2-e20b-419c-8355-d0beda7ac9da/channels?session_id=00ec08f58cd132d35b5bd1ba6779214c&token=undefined (10.106.224.160) 30.11ms referer=None
+[W 15:35:12.098 LabApp] 404 GET /api/kernels/1b1dcab2-e20b-419c-8355-d0beda7ac9da/channels?session_id=00ec08f58cd132d35b5bd1ba6779214c&token=undefined (10.106.224.160): Kernel does not exist: 1b1dcab2-e20b-419c-8355-d0beda7ac9da
+[W 15:35:12.100 LabApp] 404 GET /api/kernels/1b1dcab2-e20b-419c-8355-d0beda7ac9da/channels?session_id=00ec08f58cd132d35b5bd1ba6779214c&token=undefined (10.106.224.160) 6.28ms referer=None
+[I 15:35:59.159 LabApp] Kernel started: 62faa8b9-ebad-406c-a9e5-5558e3a3f46f
+[I 15:37:34.058 LabApp] Kernel started: 71ecc4b9-d801-4ae9-974b-b456b2f97349
+[I 15:37:34.561 LabApp] Kernel shutdown: 62faa8b9-ebad-406c-a9e5-5558e3a3f46f
+[I 15:37:41.961 LabApp] Saving file at /regression_RnD/reg.ipynb
+[I 15:37:52.690 LabApp] Saving file at /regression_RnD/reg.ipynb
+[I 15:39:53.065 LabApp] Saving file at /regression_RnD/reg.ipynb
+./start_jupyterlab.sh: line 1:  5477 Killed                  jupyter-lab --no-browser --ip=10.63.36.18 --port=9191

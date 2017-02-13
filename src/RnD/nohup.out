@@ -1,0 +1,70 @@
+[W 15:46:09.661 LabApp] Unrecognized JSON config file version, assuming version 1
+[I 15:46:09.817 LabApp] JupyterLab alpha preview extension loaded from /mnt/resource/analytics/anaconda3/lib/python3.5/site-packages/jupyterlab
+[I 15:46:09.821 LabApp] Serving notebooks from local directory: /home/iriadmin/g/JLib/src/RnD
+[I 15:46:09.821 LabApp] 0 active kernels 
+[I 15:46:09.821 LabApp] The Jupyter Notebook is running at: http://10.63.36.18:9191/
+[I 15:46:09.821 LabApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[W 15:46:14.374 LabApp] No such file or directory: regression_RnD
+[W 15:46:14.375 LabApp] 404 GET /api/contents/regression_RnD?1486914374321 (10.106.224.160) 0.91ms referer=http://10.63.36.18:9191/lab
+[W 15:46:14.383 LabApp] No such file or directory: regression_RnD/reg.ipynb
+[W 15:46:14.384 LabApp] 404 GET /api/contents/regression_RnD/reg.ipynb?1486914374331 (10.106.224.160) 1.04ms referer=http://10.63.36.18:9191/lab
+[I 15:46:24.494 LabApp] Creating new notebook in /reg
+[I 15:46:34.817 LabApp] Kernel started: 6e69a299-2a8e-46c3-8110-072fee0f5084
+[I 15:46:59.204 LabApp] Creating new notebook in /opt
+[I 15:47:10.020 LabApp] Kernel started: d03f5c0d-29e4-4b94-a2c0-ec8c0299ad36
+[I 15:47:17.038 LabApp] Saving file at /opt/opt.ipynb
+[I 15:47:18.597 LabApp] Saving file at /opt/opt.ipynb
+[I 15:47:19.074 LabApp] Saving file at /opt/opt.ipynb
+[I 15:47:56.002 LabApp] Saving file at /reg/reg.ipynb
+[I 15:49:56.303 LabApp] Saving file at /reg/reg.ipynb
+[I 15:51:38.994 LabApp] Creating new notebook in /reg
+[I 15:51:56.759 LabApp] Saving file at /reg/reg.ipynb
+[I 15:51:57.108 LabApp] Kernel started: 9071a54c-28c4-4836-b4dd-ab709e18fd9c
+[I 15:52:08.299 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 15:58:08.751 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:00:09.247 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:06:11.313 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:08:12.049 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:10:12.710 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:12:13.377 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:14:13.959 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:16:14.533 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:16:46.701 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:18:47.317 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:18:58.884 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:20:59.559 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:22:26.251 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:24:26.896 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:26:28.596 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:28:29.178 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 16:57:33.434 LabApp] Saving file at /opt/opt.ipynb
+[I 16:59:34.022 LabApp] Saving file at /opt/opt.ipynb
+[I 17:01:34.668 LabApp] Saving file at /opt/opt.ipynb
+[I 17:04:39.722 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:06:40.578 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:10:41.618 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:36:50.539 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:38:51.132 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:42:51.775 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:44:52.469 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:46:53.165 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:48:53.763 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:54:54.585 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 17:56:55.167 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 18:20:55.907 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 18:22:56.584 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 18:24:57.360 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 18:26:58.155 LabApp] Saving file at /reg/fixLmm.ipynb
+[I 19:09:16.767 LabApp] Saving file at /reg/fixLmm.ipynb
+[W 20:01:07.810 LabApp] WebSocket ping timeout after 119935 ms.
+[W 20:01:10.239 LabApp] WebSocket ping timeout after 119943 ms.
+[W 20:01:10.399 LabApp] WebSocket ping timeout after 119943 ms.
+[W 20:01:10.554 LabApp] WebSocket ping timeout after 119940 ms.
+[W 20:01:12.727 LabApp] WebSocket ping timeout after 119923 ms.
+[W 20:01:29.885 LabApp] WebSocket ping timeout after 119936 ms.
+[W 03:53:48.649 LabApp] WebSocket ping timeout after 119919 ms.
+[W 03:53:49.247 LabApp] WebSocket ping timeout after 119927 ms.
+[W 03:53:50.308 LabApp] WebSocket ping timeout after 119840 ms.
+[W 03:53:51.048 LabApp] WebSocket ping timeout after 119889 ms.
+[W 03:53:52.272 LabApp] WebSocket ping timeout after 119929 ms.
+[W 03:54:08.788 LabApp] WebSocket ping timeout after 119931 ms.

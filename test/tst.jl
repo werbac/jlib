@@ -1,4 +1,4 @@
-
+"""
 #export JULIA_NUM_THREADS=4
 ENV["JULIA_PKGDIR"] = "/mapr/mapr04p/analytics0001/analytic_users/jpkg" 
 for i in ["10.106.128.212","10.106.128.213","10.106.128.214","10.106.128.215","10.106.128.216","10.106.128.217",
@@ -10,13 +10,11 @@ end #addprocs(1)
 using DataStructures, DataArrays , DataFrames, StatsFuns, GLM , Distributions, MixedModels, StatsBase, JSON, StatLib, NamedArrays, JuMP, NLopt, NLsolve
 @everywhere using DataStructures, DataArrays , DataFrames, StatsFuns, GLM , Distributions, MixedModels, StatsBase, JSON, StatLib, NamedArrays, JuMP, NLopt, NLsolve
 
+root = !isdefined(:root) ? pwd() : root
 
-
-
-
-"""
+" " "
 SWARMING - hold on
-"""
+" " "
 const SHELF = OrderedDict()
 freew() = setdiff(workers(),[v[:worker] for (k,v) in SHELF])             
 hasfreew() = length(freew()) > 0 ? true : false
@@ -71,13 +69,21 @@ macro swarm(p, expr)
     ex = :( @async swarm($(esc(p)), $expr))
 end   
         
-
+"""
 # ******************************************  
 
 
 
+#export JULIA_NUM_THREADS=4
+ENV["JULIA_PKGDIR"] = "/mapr/mapr04p/analytics0001/analytic_users/jpkg" 
+@everywhere insert!(Base.LOAD_CACHE_PATH, 1, "/mapr/mapr04p/analytics0001/analytic_users/jpkg/lib/v0.5")
+@everywhere pop!(Base.LOAD_CACHE_PATH)
+using DataStructures, DataArrays , DataFrames, StatsFuns, GLM , Distributions, MixedModels, StatsBase, JSON, StatLib, NamedArrays, JuMP, NLopt, NLsolve
+@everywhere using DataStructures, DataArrays , DataFrames, StatsFuns, GLM , Distributions, MixedModels, StatsBase, JSON, StatLib, NamedArrays, JuMP, NLopt, NLsolve
+
 
 root = !isdefined(:root) ? pwd() : root
+MP = !isdefined(:MP) ? false : MP
 
 const cfgDefaults=OrderedDict( :P2_Competitor => true
                         ,:pvalue_lvl => 0.20  #pvalue_lvl = 0.20 
@@ -98,8 +104,6 @@ const cfgDefaults=OrderedDict( :P2_Competitor => true
                         ,:pen_logvar => :Buyer_Pre_P1
                         ,:TotalModelsOnly=>false
                        )
-
-root = !isdefined(:root) ? pwd() : root
 cfgDefaults = mergeDict(dict_Sym(read_cfg(root)),cfgDefaults)
 
 #function loadDF()
@@ -148,7 +152,6 @@ function getCFG(df_in::DataFrame)
     return cfg
 end
 cfg=getCFG(df_in)
-
 isValid(df_in,cfg)
 
 function reworkCFG!(df_in::DataFrame,cfg::OrderedDict)
@@ -186,9 +189,16 @@ end
 dfd = reworkCFG!(df_in,cfg)
 
 
-function data_Prep(dfd::DataFrame, cfg::OrderedDict)
+
+
+function MatchMe2(dfd::DataFrame,cfg::OrderedDict)
     dfd[:isO]=false
-    dfd[dfd[:number_of_children_in_living_Un].>=4,:number_of_children_in_living_Un] = 4  # aggregate #of children for 4+ L_114
+    dfd[dfd[:person_1_gender].=="U",:isO] = true 
+    for r in cfg[:random_campaigns]    
+        dfd[findin(dfd[r],["\\N","NULL","0","NONE"])  ,r] ="none"
+        dfd[ (dfd[:isO].==false) & (dfd[r].!="none") & (dfd[:group].==0) ,:isO] = true 
+        dfd[ (dfd[:isO].==false) & (dfd[r].=="none") & (dfd[:group].!=0) ,:isO] = true
+    end
     if typeof(dfd[:group]) in [DataArray{String,1}] 
         dfd[ findin(dfd[:group],["//N","\\N"]), :group] = "0" 
         dfd[DataArrays.isna(dfd[:group]), :group]="0"
@@ -196,6 +206,77 @@ function data_Prep(dfd::DataFrame, cfg::OrderedDict)
     else
         dfd[ DataArrays.isnan(dfd[:group]), :group] = 0
     end
+
+    df=dfd[dfd[:isO].==false,[:panid,:group,:Buyer_Pre_P1,cfg[:ProScore]]]
+    df_exp     = df[df[:group].==1,:]
+    df_unexp   = df[df[:group].==0,:]
+    df_exp_dim   = nrow(df_exp)
+    df_unexp_dim = nrow(df_unexp)
+    new_unexp_dim = df_unexp_dim*(df_unexp_dim>2000000 ? 0.3 : df_unexp_dim>1000000 ? 0.4 : df_unexp_dim>750000 ? 0.6 : 0.7)
+    if length(string(cfg[:ProScore])) == 0
+        df_unexp_1 =  df[(df[:group].==0)&(df[:Buyer_Pre_P1].==1),:]
+        df_unexp_0 =  df[(df[:group].==0)&(df[:Buyer_Pre_P1].==0),:]
+        df_exp_1_dim = nrow(df[(df[:group].==1)&(df[:Buyer_Pre_P1].==1),:])
+        df_exp_0_dim = nrow(df[(df[:group].==1)&(df[:Buyer_Pre_P1].==0),:])
+        df_unexp_1_dim = nrow(df_unexp_1)
+        df_unexp_0_dim =  nrow(df_unexp_0)     
+        dim_sample0 = round(Int64, (new_unexp_dim-df_exp_dim  ) / (1+(df_exp_1_dim / df_exp_0_dim)) )
+        dim_sample1 = round(Int64, new_unexp_dim - df_exp_dim - dim_sample0)    
+        new_df_unexp_1 = df_unexp_1[sample(1:size(df_unexp_1,1), dim_sample1 ),:]
+        new_df_unexp_0 = df_unexp_0[sample(1:size(df_unexp_0,1), dim_sample0 ),:]
+        dfd_sample  = vcat(df_exp,new_df_unexp_1,new_df_unexp_0)
+    elseif length(string(cfg[:ProScore])) > 0    
+        sample_control_data=similar(df_unexp, 0)
+        for (key, value) in countmap(df_exp[cfg[:ProScore]])
+            sample_dim=round(Int64,new_unexp_dim*(value/df_exp_dim))
+            temp_data = df_unexp[df_unexp[cfg[:ProScore]].==key,:]
+            if sample_dim > size(temp_data,1) sample_dim = size(temp_data,1) end  #??
+            samp_data = temp_data[sample(1:size(temp_data,1), sample_dim, replace=false),:]
+            sample_control_data = vcat(sample_control_data,    samp_data   )
+        end
+        sample_data = vcat(sample_control_data,df_exp)
+        sample_df_unexp = sample_data[sample_data[:group].==0,:]
+        sample_df_exp   = sample_data[sample_data[:group].==1,:]
+        sample_df_unexp_1 = sample_data[(sample_data[:group].==0)&(sample_data[:Buyer_Pre_P1].==1),:]  
+        sample_df_unexp_0 = sample_data[(sample_data[:group].==0)&(sample_data[:Buyer_Pre_P1].==0),:]    
+        sample_df_exp_1 =  sample_data[(sample_data[:group].==1)&(sample_data[:Buyer_Pre_P1].==1) ,:]
+        sample_df_exp_0 =  sample_data[(sample_data[:group].==1)&(sample_data[:Buyer_Pre_P1].==0) ,:]
+        sample_df_unexp_1_dim = nrow(sample_df_unexp_1)
+        sample_df_unexp_0_dim = nrow(sample_df_unexp_0)
+        sample_df_exp_1_dim = nrow(sample_df_exp_1)
+        sample_df_exp_0_dim = nrow(sample_df_exp_0)
+        dim_sampleA = round(Int64,(sample_df_exp_1_dim/sample_df_exp_0_dim)*sample_df_unexp_0_dim)
+        dim_sampleB = round(Int64,(sample_df_exp_0_dim/sample_df_exp_1_dim)*sample_df_unexp_1_dim)
+        if sample_df_unexp_1_dim/sample_df_unexp_0_dim > sample_df_exp_1_dim/sample_df_exp_0_dim
+            new_df_unexp_1 = sample_df_unexp_1[sample(1:sample_df_unexp_1_dim,dim_sampleA , replace=false),:]
+            dfd_sample = vcat(sample_df_exp,new_df_unexp_1,sample_df_unexp_0)
+        else
+            new_df_unexp_0 = sample_df_unexp_0[sample(1:sample_df_unexp_0_dim, dim_sampleB, replace=false ),:]
+            dfd_sample = vcat(sample_df_exp,sample_df_unexp_1,new_df_unexp_0)
+        end
+    end 
+    rows2remove = setdiff(dfd[:panid],dfd_sample[:panid])
+    dfd[findin(dfd[:panid],rows2remove),:isO]=true 
+    return dfd[dfd[:isO].==false, : ]  
+end
+#dfd = MatchMe2(dfd,cfg)
+
+#by(dfd,[:isO,:group],df -> size(df[:group],1))
+
+
+
+function data_Prep(dfd::DataFrame, cfg::OrderedDict)
+    dfd[:isO]=false
+    dfd[dfd[:number_of_children_in_living_Un].>=4,:number_of_children_in_living_Un] = 4  # aggregate #of children for 4+ L_114
+    # ..... hash
+    if typeof(dfd[:group]) in [DataArray{String,1}] 
+        dfd[ findin(dfd[:group],["//N","\\N"]), :group] = "0" 
+        dfd[DataArrays.isna(dfd[:group]), :group]="0"
+        dfd[:group] = [parse(Int64,s) for s = dfd[:group]]
+    else
+        dfd[ DataArrays.isnan(dfd[:group]), :group] = 0
+        end   
+    # ..... end hash
     vars = DataFrame(names=names(dfd),eltypes=eltypes(dfd))
     for c in setdiff(vars[findin(vars[:eltypes],[String]),:names],cfg[:allrandoms])
         print("Convert String: String->Numeric: ",c)
@@ -210,14 +291,17 @@ function data_Prep(dfd::DataFrame, cfg::OrderedDict)
     for c in  setdiff(vars[findin(vars[:eltypes],[Int64]),:names],cfg[:allrandoms])    
         println("Replace Int64 NaN (0) : ",c)
         dfd[ DataArrays.isnan(dfd[c]), c] = 0
-    end
-    dfd[dfd[:person_1_gender].=="U",:isO] = true  
+    end 
     dfd[findin(dfd[:estimated_hh_income],["U","L"]),:estimated_hh_income]="L" 
+
+    dfd[dfd[:person_1_gender].=="U",:isO] = true  #..... hash
     for r in cfg[:random_campaigns]    
         dfd[findin(dfd[r],["\\N","NULL","0","NONE"])  ,r] ="none"
         dfd[ (dfd[:isO].==false) & (dfd[r].!="none") & (dfd[:group].==0) ,:isO] = true 
         dfd[ (dfd[:isO].==false) & (dfd[r].=="none") & (dfd[:group].!=0) ,:isO] = true
-    end
+        end   # ....... end hash
+    
+# Don't need any more - because we aren't doing outliers
     dfd[:data_NB_NE_B] = false
     dfd[ (dfd[:Buyer_Pre_P1].==0 ) & (dfd[:group].==0 ) & (dfd[:Buyer_Pos_P1].==1 ) ,:data_NB_NE_B] = true
     dfd[:data_B_E_NB] = false
@@ -231,6 +315,7 @@ function data_Prep(dfd::DataFrame, cfg::OrderedDict)
     return dfd[dfd[:isO].==false, : ]   
 end
 dfd = data_Prep(dfd, cfg);
+
 
 function Restrict50Buyers()
     for (k,v) in Dict(r=>countmap(dfd[(dfd[:Buyer_Pos_P1].==1), r]) for r in cfg[:random_campaigns])
@@ -248,8 +333,16 @@ function Restrict50Buyers()
 end
 Restrict50Buyers()    
 
+"""
+    perf test
+     DataFrame([Real,Real,Real],[:a,:b,:c], 10000)
+    similar(dfd,length(dfd[1])*2)
+"""
+    
+    
 function MatchMe(dfd::DataFrame,cfg::OrderedDict)
-    df=dfd[dfd[:isO].==false,:]
+    #df=dfd[dfd[:isO].==false,:]
+    df=dfd[dfd[:isO].==false,[:panid,:group,:Buyer_Pre_P1,cfg[:ProScore]]]
     df_exp     = df[df[:group].==1,:]
     df_unexp   = df[df[:group].==0,:]
     df_exp_dim   = nrow(df_exp)
@@ -278,7 +371,6 @@ function MatchMe(dfd::DataFrame,cfg::OrderedDict)
             samp_data = temp_data[sample(1:size(temp_data,1), sample_dim, replace=false),:]
             sample_control_data = vcat(sample_control_data,    samp_data   )
         end
-        
         sample_data = vcat(sample_control_data,df_exp)
         sample_df_unexp = sample_data[sample_data[:group].==0,:]
         sample_df_exp   = sample_data[sample_data[:group].==1,:]
@@ -303,33 +395,11 @@ function MatchMe(dfd::DataFrame,cfg::OrderedDict)
     end 
     rows2remove = setdiff(dfd[dfd[:isO].==false, :panid],dfd_sample[:panid])
     #dfd[findin(dfd[:panid],rows2remove),:whyO]="NoMatch"
-    dfd[findin(dfd[:panid],rows2remove),:isO]=true 
-        
-
-#    --------------Matching - pre-post ------------------
-"""
-    dfp=join(by(dfd[(dfd[:isO].==false),:],[:group,:Buyer_Pos_P1], df->DataFrame(cnt=size(df,1))) ,  
-             by(dfd[(dfd[:isO].==false),:],:group,df->DataFrame(tot=size(df,1)))
-             , on=:group 
-            )  
-    dfp[:prop] = dfp[:cnt]./dfp[:tot]
-    if dfp[(dfp[:group].==1)&(dfp[:Buyer_Pos_P1].==1),:prop][1] < dfp[(dfp[:group].==0)&(dfp[:Buyer_Pos_P1].==1),:prop][1]  
-            
-        scnt = Int( round(( dfp[(dfp[:group].==0)&(dfp[:Buyer_Pos_P1].==0),:cnt][1]*dfp[(dfp[:group].==1)&(dfp[:Buyer_Pos_P1].==1),:prop][1] ) / (1-dfp[(dfp[:group].==1)&(dfp[:Buyer_Pos_P1].==1),:prop][1])  ))
-        smp = sample(dfd[(dfd[:isO].==false)&(dfd[:Buyer_Pos_P1].==1)&(dfd[:group].==0),:panid], scnt , replace=false)
-       
-        oliers = setdiff(dfd[(dfd[:isO].==false)&(dfd[:Buyer_Pos_P1].==1)&(dfd[:group].==0),:panid],smp)
-        
-        dfd[findin(dfd[:panid], setdiff(dfd[(dfd[:isO].==false)&(dfd[:Buyer_Pos_P1].==1)&(dfd[:group].==0),:panid],smp)),:isO] =true
-   end
-"""
-        # ---- end matching ------------
-        
-        
-        
+    dfd[findin(dfd[:panid],rows2remove),:isO]=true     
     return dfd[dfd[:isO].==false, : ]  #[setdiff(names(dfd),[:isO,:whyO])] 
 end
 dfd = MatchMe(dfd,cfg)
+    
 
 lowercase!(dfd)
 cfg=lowercase(cfg)
@@ -568,6 +638,9 @@ save_modelsDict(root, modelsDict)
     
     
 # ******************************* MODELS **********************************************************
+using DataStructures, DataArrays , DataFrames, StatsFuns, GLM , Distributions, MixedModels, StatsBase, JSON, StatLib, NamedArrays
+root = !isdefined(:root) ? pwd() : root
+    
 modelsDict = read_modelsDict(root) #modelsDict = readModels(jmod_fname) 
                 
 @everywhere function runGlm(root::String, modelname::Symbol, ranef::Symbol=:empty)
@@ -635,7 +708,7 @@ end
     end
 end
     
-dx=OrderedDict()  # defaults to empty - so that consolidate will work with seq or MP
+#dx=OrderedDict()  # defaults to empty - so that consolidate will work with seq or MP
 function runModels(root::String, modelsDict::Dict)
     dfd = read_dfd(root) #dfd = readtable(mod_fname,header=true);
     poolit!(dfd,modelsDict[:factors])
@@ -665,33 +738,35 @@ end
     
     
     
-function runModels( root::String, modelsDict::Dict)
-   @swarm :glm_ipen runGlm(root, :ipen)
-   sleep(25)
-   @swarm :glm_iocc runGlm(root, :iocc)
-   sleep(25)
-   @swarm :glm_idolocc runGlm(root, :idolocc)    
-   q = Symbol[]
-   cnt=0
-   for (k,v) in OrderedDict(m=>modelsDict[m][:raneff] for m in [:ipen,:idolocc,:iocc]) 
-        for r in v push!(q,k); push!(q,r); cnt=cnt+1 end 
-   end
-   x=reshape(q, (2,cnt))
-   ml = permutedims(x, [2, 1])
-   m=:empty
-   for i in 1:length(ml[:,1]) 
-       r=Symbol("glmm_"*string(ml[i,:][1])*"_"*string(ml[i,:][2]))
-       @swarm r runGlmm(root, ml[i,:][1], ml[i,:][2]) 
-       covg=Symbol("covglm_"*string(ml[i,:][1])*"_"*string(ml[i,:][2])   )
-       @swarm covg runGlm(root, ml[i,:][1], ml[i,:][2]) 
-   end 
-   sleep(20)
-   while !iscompletew() println("Not Complete yet!"); sleep(5); end 
-   println("DONE!DONE!DONE!")
-end        
-runModels(root,modelsDict)                   
-     
-             
+#function runModels( root::String, modelsDict::Dict)
+#   @swarm :glm_ipen runGlm(root, :ipen)
+#   sleep(25)
+#   @swarm :glm_iocc runGlm(root, :iocc)
+#   sleep(25)
+#   @swarm :glm_idolocc runGlm(root, :idolocc)    
+#   q = Symbol[]
+#   cnt=0
+#   for (k,v) in OrderedDict(m=>modelsDict[m][:raneff] for m in [:ipen,:idolocc,:iocc]) 
+#        for r in v push!(q,k); push!(q,r); cnt=cnt+1 end 
+#   end
+#   x=reshape(q, (2,cnt))
+#   ml = permutedims(x, [2, 1])
+#   m=:empty
+#   for i in 1:length(ml[:,1]) 
+#       r=Symbol("glmm_"*string(ml[i,:][1])*"_"*string(ml[i,:][2]))
+#       @swarm r runGlmm(root, ml[i,:][1], ml[i,:][2]) 
+#       covg=Symbol("covglm_"*string(ml[i,:][1])*"_"*string(ml[i,:][2])   )
+#       @swarm covg runGlm(root, ml[i,:][1], ml[i,:][2]) 
+#   end 
+#   sleep(20)
+#   while !iscompletew() println("Not Complete yet!"); sleep(5); end 
+#   println("DONE!DONE!DONE!")
+#end        
+#runModels(root,modelsDict)                   
+ 
+dx=(isdefined(:MP))&(MP)?(MPrunModels(root,modelsDict);OrderedDict()):runModels(root,modelsDict) 
+
+        
 function consolidateResults(modelsDict::Dict,dx::OrderedDict=OrderedDict())  
   sdf = DataFrame(parameter=String[], coef=Int64[], stderr=Int64[], zval=Int64[], pval=Int64[], model=String[], ranef=String[], modelType=String[])
     for m in [:iocc, :idolocc, :ipen]
@@ -734,7 +809,14 @@ save_dfx(root,dfx)      #writetable(root*"/campaign.csv", dfx)
 
     
 # ************************************* SCORING*************************************************************************************
-        
+  
+ENV["JULIA_PKGDIR"] = "/mapr/mapr04p/analytics0001/analytic_users/jpkg" 
+@everywhere insert!(Base.LOAD_CACHE_PATH, 1, "/mapr/mapr04p/analytics0001/analytic_users/jpkg/lib/v0.5")
+@everywhere pop!(Base.LOAD_CACHE_PATH)
+using DataStructures, DataArrays , DataFrames, StatsFuns, GLM , Distributions, MixedModels, StatsBase, JSON, StatLib, NamedArrays, JuMP, NLopt, NLsolve
+@everywhere using DataStructures, DataArrays , DataFrames, StatsFuns, GLM , Distributions, MixedModels, StatsBase, JSON, StatLib, NamedArrays, JuMP, NLopt, NLsolve
+root = !isdefined(:root) ? pwd() : root
+            
 modelsDict = read_modelsDict(root)  
 modelsDict[:occ]=modelsDict[:iocc]; delete!(modelsDict,:iocc)
 modelsDict[:dolocc]=modelsDict[:idolocc]; delete!(modelsDict,:idolocc)
@@ -1062,8 +1144,8 @@ dfx=removeBreaks(dfx)
 
 
 function genHHCounts()
-    if isfile(root*"/hhcnts.csv")
-        hhcnts = readtable(root*"/hhcnts.csv"); rename!(hhcnts,:class,:ranef); rename!(hhcnts,:level,:parameter); lowercase(hhcnts); hhcnts[:ranef] = lowercase(hhcnts[:ranef])
+    if isfile(root*"/hhcounts.csv")
+        hhcnts = readtable(root*"/hhcounts.csv"); rename!(hhcnts,:class,:ranef); rename!(hhcnts,:level,:parameter); lowercase(hhcnts); hhcnts[:ranef] = lowercase(hhcnts[:ranef])
         tots = by(hhcnts,[:ranef], df -> sum(df[:hh]))
         hhcnts = join(hhcnts, tots, on = :ranef)
         rename!(hhcnts,:x1,:tot)
@@ -1116,7 +1198,7 @@ end
     
 
 function weightDFX()
-    if isfile(root*"/hhcnts.csv")
+    if isfile(root*"/hhcounts.csv")
         cols= [:adj_mean_score0, :adj_mean_score1, :unadj_avg_expsd_hh_pre, :unadj_avg_expsd_hh_pst, :unadj_avg_cntrl_hh_pre, :unadj_avg_cntrl_hh_pst]
         dfw = genWeights() 
         for row in eachrow(dfw)
@@ -1262,35 +1344,41 @@ genDHHMeans(dfx)
 
         
         
-# ************************************* OPT ****************************************************************************************    
-@everywhere function CIOx(iDict::OrderedDict)
-    v_ttl=2
-    M = get(iDict,:M,NA)
-    Mt = get(iDict,:Mt,NA)
-    Mc = get(iDict,:Mc,NA)
-    N = get(iDict,:N,NA)
-    Nt = get(iDict,:Mt,NA)
-    Nc = get(iDict,:Nc,NA)
-    B1 = get(iDict,:B1,NA)
-    B2 = get(iDict,:B2,NA)
-    B3 = get(iDict,:B3,NA)
-    SE1 = get(iDict,:SE1,NA)
-    SE2 = get(iDict,:SE2,NA)
-    SE3 = get(iDict,:SE3,NA)
-    o_mean_score0 = get(iDict,:o_mean_score0,NA)
-    o_mean_score1 = get(iDict,:o_mean_score1,NA)
-    y_mean_score0 = get(iDict,:y_mean_score0,NA)
-    y_mean_score1 = get(iDict,:y_mean_score1,NA)
-    p_mean_score0 = get(iDict,:p_mean_score0,NA)
-    p_mean_score1 =get(iDict,:p_mean_score1,NA)
-    # ****** PValue ******
+# -------------------------------------------------------------------------------------------------------------
+ 
+
+@everywhere function OPTPValue(iDict::OrderedDict)
+    dout = iDict 
+    M = get(iDict, :M, NA)
+    Mt = get(iDict, :Mt, NA)
+    Mc = get(iDict, :Mc, NA)
+    N = get(iDict, :N, NA)
+    Nt = get(iDict, :Mt, NA)
+    Nc = get(iDict, :Nc, NA)
+    B1 = get(iDict, :B1, NA)
+    B2 = get(iDict, :B2, NA)
+    B3 = get(iDict, :B3, NA)
+    SE1 = get(iDict, :SE1, NA)
+    SE2 = get(iDict, :SE2, NA)
+    SE3 = get(iDict, :SE3, NA)
     SEsq=sqrt(SE1^2+SE2^2+SE3^2)
+    o_mean_score0 = get(iDict, :o_mean_score0, NA)
+    o_mean_score1 = get(iDict, :o_mean_score1, NA)
+    y_mean_score0 = get(iDict, :y_mean_score0, NA)
+    y_mean_score1 = get(iDict, :y_mean_score1, NA)
+    p_mean_score0 = get(iDict, :p_mean_score0, NA)
+    p_mean_score1 =get(iDict, :p_mean_score1, NA)
     Bsum=B1+B2+B3
+    dout[:Bsum] = Bsum  
+    ###### PVALUE - ONE & TWO ########
     m=nothing
-    m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=v_ttl))  
-    @variable(m, Bocc <= B1)
-    @variable(m, Bdolocc <= B2)
-    @variable(m, Bpen <= B3)     
+    m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=2))
+    #@variable(m, Bocc <= B1)
+    #@variable(m, Bdolocc <= B2)
+    #@variable(m, Bpen <= B3)
+    if B1 > 0 @variable(m, Bocc <= B1) else @variable(m, Bocc >= B1) end
+    if B2 > 0 @variable(m, Bdolocc <= B2) else @variable(m, Bdolocc >= B2) end
+    if B3 > 0 @variable(m, Bpen <= B3) else @variable(m, Bpen >= B3) end
     @objective(m, Max, (((Bocc+Bpen+Bdolocc)-Bsum)/SEsq ))
     @NLconstraint(m, 0.00000 <= ((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))
 	                           * ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))
@@ -1303,126 +1391,202 @@ genDHHMeans(dfx)
 	                          ) 
 	               <= 0.00001
                     )
+    #print(m)
     status = solve(m)
     zvalue=getobjectivevalue(m)
-    iDict[:pval] =2.0 * ccdf(Normal(), abs(zvalue))
-    println("z-value: ", string(zvalue)," --> p-value: ",string(iDict[:pval]))         
-    # ****** UB-LB ******
+    pvalue=2.0 * ccdf(Normal(), abs(zvalue))
+    two_tail = 1-pvalue     
+    one_tail = 1-(pvalue/2)
+    dout[:pval] = pvalue
+    dout[:onetail_pval] = one_tail
+    dout[:twotail_pval] = two_tail
+    println("z-value: ", string(zvalue)," --> p-value: ",string(two_tail))
+    return dout           
+end
+            
+
+
+@everywhere function OPT_LB(iDict::OrderedDict, zscore::Float64, iAccuracy::Float64=0.000000001,minval::Float64=0.0)
+    M = get(iDict, :M, NA)
+    Mt = get(iDict, :Mt, NA)
+    Mc = get(iDict, :Mc, NA)
+    N = get(iDict, :N, NA)
+    Nt = get(iDict, :Mt, NA)
+    Nc = get(iDict, :Nc, NA)
+    B1 = get(iDict, :B1, NA)
+    B2 = get(iDict, :B2, NA)
+    B3 = get(iDict, :B3, NA)
+    SE1 = get(iDict, :SE1, NA)
+    SE2 = get(iDict, :SE2, NA)
+    SE3 = get(iDict, :SE3, NA)
     o_SE0 = get(iDict, :o_SE0, 0)
     y_SE0 = get(iDict, :y_SE0, 0)
     p_SE0 = get(iDict, :p_SE0, 0)
+    SEsq=sqrt(SE1^2+SE2^2+SE3^2+o_SE0^2+y_SE0^2+p_SE0^2)
     o_B0 = get(iDict, :o_B0, 0)
     y_B0 = get(iDict, :y_B0, 0)
-    p_B0 = get(iDict, :p_B0, 0)        
-    SEsq=sqrt(SE1^2+SE2^2+SE3^2+o_SE0^2+y_SE0^2+p_SE0^2)        
-    Bsum=(B1+B2+B3)-(o_B0+y_B0+p_B0)        
-    ZDict = Dict("onetail_80_pct_intrvl" => 0.84 ,"onetail_90_pct_intrvl" => 1.28, "twotail_80_pct_intrvl" => 1.28, "twotail_90_pct_intrvl" => 1.65)
-    AccArr= [ 0.000000001,0.00000001,0.0000001,0.000001,0.00001,0.0001,0.001,0.01]
-    ftxt="!!!!!!!!!!!!!!!!!!FAILED!!!!!!!!!!!!!!!!!!!!!!!!"
-    failmsg(b::String,interval::String,meta::String) = println(ftxt*"   ",b," ",interval," := ",meta," == "*ftxt) 
-    for (zscore_key,zscore) in  ZDict  
-        # **********************  LB  ***************************
+    p_B0 = get(iDict, :p_B0, 0)
+    o_mean_score0 = get(iDict, :o_mean_score0, NA)
+    o_mean_score1 = get(iDict, :o_mean_score1, NA)
+    y_mean_score0 = get(iDict, :y_mean_score0, NA)
+    y_mean_score1 = get(iDict, :y_mean_score1, NA)
+    p_mean_score0 = get(iDict, :p_mean_score0, NA)
+    p_mean_score1 =get(iDict, :p_mean_score1, NA)
+    #println(M,"\n",Mt,"\n",Mc,"\n",N,"\n",Nt,"\n",Nc,"\n",B1,"\n",B2,"\n",B3,"\n",SE1,"\n",SE2,"\n",SE3,"\n",o_SE0,"\n",y_SE0,"\n",p_SE0,"\n",SEsq,"\n",
+    #        o_B0,"\n",y_B0,"\n",p_B0,"\n",o_mean_score0,"\n",o_mean_score1,"\n",y_mean_score0,"\n",y_mean_score1,"\n",p_mean_score0,"\n",p_mean_score1) 
+    pen_t = p_mean_score1*(Nt/N)
+    pen_c = p_mean_score0*(Nc/N)
+    occ_t = o_mean_score1*(Mt/M)
+    occ_c = o_mean_score0*(Mc/M)
+    dolocc_t = y_mean_score1*(Mt/M)
+    dolocc_c = y_mean_score0*(Mc/M)
+    Bsum=(B1+B2+B3)-(o_B0+y_B0+p_B0)
+    ztot = Bsum-(zscore*SEsq)
+    ######CONFIDENCE INTERVAL - LB ########        
+    m=nothing
+    m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=2))
+    @variable(m, Bocc <= (B1-o_B0))
+    @variable(m, Bdolocc <= (B2-y_B0))
+    @variable(m, Bpen <= (B3-p_B0))
+    #@NLexpression(m, expr1 ,(( ((pen_t + pen_c*exp(Bpen))*(occ_t+occ_c*exp(Bocc))*(dolocc_t+dolocc_c*exp(Bdolocc)))
+    #                           /
+    #                          ((pen_t*exp(-Bpen)+pen_c)*(occ_t*exp(-Bocc)+occ_c)*(dolocc_t*exp(-Bdolocc)+dolocc_c))
+    #                          )-1)
+    #                 )
+    
+    @NLexpression(m, expr1 ,(  ( ((pen_t + pen_c*exp(Bpen))*(occ_t+occ_c*exp(Bocc))*(dolocc_t+dolocc_c*exp(Bdolocc)))
+                                   -
+                                  ((pen_t*exp(-Bpen)+pen_c)*(occ_t*exp(-Bocc)+occ_c)*(dolocc_t*exp(-Bdolocc)+dolocc_c))
+                                ) / ((pen_t*exp(-Bpen)+pen_c)*(occ_t*exp(-Bocc)+occ_c)*(dolocc_t*exp(-Bdolocc)+dolocc_c))
+                              
+                            )
+                     )
+    
+    #@NLobjective(m, Min, (( ((pen_t + pen_c*exp(Bpen))*(occ_t+occ_c*exp(Bocc))*(dolocc_t+dolocc_c*exp(Bdolocc)))
+    #                                /
+    #                               ((pen_t*exp(-Bpen)+pen_c)*(occ_t*exp(-Bocc)+occ_c)*(dolocc_t*exp(-Bdolocc)+dolocc_c))
+    #                             )-1)
+    #                    )
+    @NLobjective(m, Min, expr1)
+    @constraint(m, (0.000000000<= (((Bocc+Bpen+Bdolocc)-ztot))<= iAccuracy)) 
+    @NLconstraint(m, constr1, iDict[:minval] <= expr1)
+    status = solve(m)
+    mval=getobjectivevalue(m)
+    println(mval)
+    println(status)
+    #return status == :Optimal ? mval : -Inf
+    return (status != :Optimal)|(mval < -0.85 ) ? -Inf : mval
+end
+#OPT_LB(collectModels(dfx,"GLMM","campaign_name","Pure_Life_Promise"), 0.84, float("0.000000001"))
+#zscore=0.84
+#iAccuracy=float("0.000000001")
+#OPT_LB(collectModels(dfx,"GLMM","site","Evite.com"), 1.65, float("0.000000001"))
+
+
+
+@everywhere function OPT_UB(iDict::OrderedDict, zscore::Float64, iAccuracy::Float64=0.000000001,maxval::Float64=0.0)
+    M = get(iDict, :M, NA)
+    Mt = get(iDict, :Mt, NA)
+    Mc = get(iDict, :Mc, NA)
+    N = get(iDict, :N, NA)
+    Nt = get(iDict, :Mt, NA)
+    Nc = get(iDict, :Nc, NA)
+    B1 = get(iDict, :B1, NA)
+    B2 = get(iDict, :B2, NA)
+    B3 = get(iDict, :B3, NA)
+    SE1 = get(iDict, :SE1, NA)
+    SE2 = get(iDict, :SE2, NA)
+    SE3 = get(iDict, :SE3, NA)
+    o_SE0 = get(iDict, :o_SE0, 0)
+    y_SE0 = get(iDict, :y_SE0, 0)
+    p_SE0 = get(iDict, :p_SE0, 0)
+    SEsq=sqrt(SE1^2+SE2^2+SE3^2+o_SE0^2+y_SE0^2+p_SE0^2)
+    o_B0 = get(iDict, :o_B0, 0)
+    y_B0 = get(iDict, :y_B0, 0)
+    p_B0 = get(iDict, :p_B0, 0)
+    o_mean_score0 = get(iDict, :o_mean_score0, NA)
+    o_mean_score1 = get(iDict, :o_mean_score1, NA)
+    y_mean_score0 = get(iDict, :y_mean_score0, NA)
+    y_mean_score1 = get(iDict, :y_mean_score1, NA)
+    p_mean_score0 = get(iDict, :p_mean_score0, NA)
+    p_mean_score1 =get(iDict, :p_mean_score1, NA)
+    pen_t = p_mean_score1*(Nt/N)
+    pen_c = p_mean_score0*(Nc/N)
+    occ_t = o_mean_score1*(Mt/M)
+    occ_c = o_mean_score0*(Mc/M)
+    dolocc_t = y_mean_score1*(Mt/M)
+    dolocc_c = y_mean_score0*(Mc/M)
+    #Bsum=B1+B2+B3 + o_B0+y_B0+p_B0
+    Bsum=(B1+B2+B3)-(o_B0+y_B0+p_B0)
+    ######CONFIDENCE INTERVAL - UB ########
+    ztot = Bsum+(zscore*SEsq)
+    m=nothing
+    m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=2))
+    @variable(m, Bocc >= (B1-o_B0))
+    @variable(m, Bdolocc >= (B2-y_B0))
+    @variable(m, Bpen >= (B3-p_B0))
+    @NLexpression(m, expr1 ,(( ((pen_t + pen_c*exp(Bpen))*(occ_t+occ_c*exp(Bocc))*(dolocc_t+dolocc_c*exp(Bdolocc)))
+                               /
+                              ((pen_t*exp(-Bpen)+pen_c)*(occ_t*exp(-Bocc)+occ_c)*(dolocc_t*exp(-Bdolocc)+dolocc_c))
+                              )-1)
+                     )
+    
+    #@NLobjective(m, Max, (( ((pen_t + pen_c*exp(Bpen))*(occ_t+occ_c*exp(Bocc))*(dolocc_t+dolocc_c*exp(Bdolocc)))
+    #                                /
+    #                               ((pen_t*exp(-Bpen)+pen_c)*(occ_t*exp(-Bocc)+occ_c)*(dolocc_t*exp(-Bdolocc)+dolocc_c))
+    #                             )-1)
+    #                    )
+    @NLobjective(m, Max, expr1)
+    @constraint(m, (0.0000<= (((Bocc+Bpen+Bdolocc)-ztot))<= iAccuracy))     
+    @NLconstraint(m, constr1, expr1 <= iDict[:maxval])
+    status = solve(m)
+    mval=getobjectivevalue(m)
+    println(mval)
+    #return return status == :Optimal ? mval : -Inf  #mval_out 
+    return (status != :Optimal)|(mval > 0.85 ) ? -Inf : mval
+end
+
+
+@everywhere function OPTCIs(iDict::OrderedDict)
+    OPTPValue(iDict)
+    #AccArr= [ "0.000000001","0.00000001","0.0000001","0.000001","0.00001","0.0001","0.001","0.01"]
+    AccArr= [ "0.000000001","0.00000001","0.0000001","0.000001","0.00001","0.0001","0.001","0.01"]
+    for (zscore_key,zscore) in  ZDict          
         pref="LB "*zscore_key[1:10]*" ("*iDict[:metakey]"):= "
         preflen=length(pref)
         dkey=Symbol(zscore_key*"_lb")
         for iAcc in AccArr
-           print(pref," - "*string(iAcc)*", ",iDict)       ;pref=lpad("", preflen, " ")
-           m=nothing
-           m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=v_ttl))               
-           ztot = Bsum-(zscore*SEsq)
-           @variable(m, Bocc <= (B1-o_B0))
-           @variable(m, Bdolocc <= (B2-y_B0))
-           @variable(m, Bpen <= (B3-p_B0))
-           #@NLobjective(m, Min, ((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))* 
-           #                             ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))*
-           #                              ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
-            #                             )
-            #                             -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))*
-            #                               ((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))*
-            #                               ((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
-            #                               )
-            #                             )
-            #                          )
-           @NLobjective(m, Min, (((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))*
-                                         ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))*
-                                         ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M))))
-                                         /
-                                         (((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))*
-                                           ((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))*
-                                           ((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))))-1)                     
-                        )
-           @constraint(m, (0.000000000<= (((Bocc+Bpen+Bdolocc)-ztot))<= iAcc)) 
-           status = solve(m)
-           mval=getobjectivevalue(m)
-           println("lb_... ",mval)
-           #mval_out=mval/(o_mean_score0*y_mean_score0*p_mean_score0)
-           mval_out=mval
-           if (status==:Optimal)&(mval_out!=Inf)&(mval_out!=-Inf)&(mval!=Inf)*(mval!=-Inf)
-               iDict[dkey] = mval_out
+           print(pref," - "*iAcc*", ",iDict)       ;pref=lpad("", preflen, " ")
+                        iDict[dkey] = OPT_LB(iDict, zscore, float(iAcc))
+           if (iDict[dkey] != -Inf) & (iDict[dkey] != Inf)
                println("            : Confidence Interval : ", string(iDict[dkey]) )
-               break      
-           else
-               iDict[dkey] = "error"
+               break
            end
         end
-        if (iDict[dkey] == "error") 
-             failmsg("LB",zscore_key[1:10],iDict[:metakey])
+        if (iDict[dkey] == -Inf) | (iDict[dkey] == Inf) 
+             println( "!!!!!!!!!!!!!!!!!!FAILED!!!!!!!!!!!!!!!!!!!!!!!!   LB ",zscore_key[1:10]," := ",iDict[:metakey]," == !!!!!!!!!!!!!!!!!!FAILED!!!!!!!!!!!!!!!!!!" ) 
         end
-        # **********************  UB  ***************************        
+       
         pref="UB "*zscore_key[1:10]*" ("*iDict[:metakey]"):= "   
         dkey=Symbol(zscore_key*"_ub")
         for iAcc in AccArr
-           print(pref," - "*string(iAcc)*", ")       ;pref=lpad("", preflen, " ")
-           m=nothing
-           m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=v_ttl))  
-           ztot = Bsum+(zscore*SEsq)
-           @variable(m, Bocc >= (B1-o_B0))
-           @variable(m, Bdolocc >= (B2-y_B0))
-           @variable(m, Bpen >= (B3-p_B0))
-           #@NLobjective(m, Max, ( (((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))
-            #                            * ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))
-            #                            * ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M)))
-            #                             )
-            #                            -(((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))
-            #                             *((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))
-            #                             *((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M)))
-            #                             )
-            #                          )
-            #                  )
-            @NLobjective(m, Max, (((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))*
-                                         ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))*
-                                         ((y_mean_score1*(Mt/M))+(y_mean_score0*exp(Bdolocc)*(Mc/M))))
-                                         /
-                                         (((p_mean_score1*(Nt/N)*exp(-Bpen))+(p_mean_score0*(Nc/N)))*
-                                           ((o_mean_score1*(Mt/M)*exp(-Bocc))+(o_mean_score0*(Mc/M)))*
-                                           ((y_mean_score1*(Mt/M)*exp(-Bdolocc))+(y_mean_score0*(Mc/M))))
-                                  )-1
-                                 )                     
-                         )
-                        
-           @constraint(m, (0.0000<= (((Bocc+Bpen+Bdolocc)-ztot))<= iAcc)) 
-           status = solve(m)
-           mval=getobjectivevalue(m)
-           println("ub_... ",mval)
-           #mval_out=mval/(o_mean_score0*y_mean_score0*p_mean_score0)
-           mval_out=mval             
-           if (status==:Optimal)&(mval_out!=Inf)&(mval_out!=-Inf)&(mval!=Inf)*(mval!=-Inf)
-               iDict[dkey] = mval_out
+           print(pref," - "*iAcc*", ")       ;pref=lpad("", preflen, " ")
+           iDict[dkey] = OPT_UB(iDict, zscore, float(iAcc))
+           if (iDict[dkey] != -Inf) & (iDict[dkey] != Inf)
                println("            : Confidence Interval : ", string(iDict[dkey]) )
-               break      
-           else
-               iDict[dkey] = "error"
+               break
            end
-        end
-        if (iDict[dkey] == "error") 
-             failmsg("UB",zscore_key[1:10],iDict[:metakey])
+        end   
+        if (iDict[dkey] == -Inf) | (iDict[dkey] == Inf) 
+            println( "!!!!!!!!!!!!!!!!!!FAILED!!!!!!!!!!!!!!!!!!   UB ",zscore_key[1:10]," := ",iDict[:metakey]," == !!!!!!!!!!!!!!!!!!FAILED!!!!!!!!!!!!!!!!!!" ) 
         end
     end
     return iDict
-end                
-# -------------------------------------------------------------------------------------------------------------------        
-        
-        
+end
+
+
+
+
 
 function collectModels(dfx::DataFrame,modelType::String,ranef::String="",level::String="")
     mDict = OrderedDict()
@@ -1430,10 +1594,14 @@ function collectModels(dfx::DataFrame,modelType::String,ranef::String="",level::
         o=dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="occ")&(dfx[:parameter].=="group"),:]
         y=dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="dolocc")&(dfx[:parameter].=="group"),:]
         p=dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="pen")&(dfx[:parameter].=="group"),:]
+        dhh=dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="dolhh")&(dfx[:parameter].=="group"),:]
+        mDict[:metakey] = "Total_Campaign" 
     else
         o=dfx[(dfx[:modelType].==modelType)&(dfx[:model].=="occ")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:]
         y=dfx[(dfx[:modelType].==modelType)&(dfx[:model].=="dolocc")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:]
         p=dfx[(dfx[:modelType].==modelType)&(dfx[:model].=="pen")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:]
+        dhh=dfx[(dfx[:modelType].==modelType)&(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:]
+        mDict[:metakey] = ranef*"~"*level 
     end
     mDict[:M]=p[:M][1]
     mDict[:Mt]=p[:Mt][1]
@@ -1468,19 +1636,26 @@ function collectModels(dfx::DataFrame,modelType::String,ranef::String="",level::
     mDict[:y_mean_score1]=y[:adj_mean_score1][1]
     mDict[:p_mean_score0]=p[:adj_mean_score0][1]
     mDict[:p_mean_score1]=p[:adj_mean_score1][1] 
+    mDict[:SEsq]=sqrt(mDict[:SE1]^2+mDict[:SE2]^2+mDict[:SE3]^2)
+    mDict[:Bsum]=mDict[:B1]+mDict[:B2]+mDict[:B3]
+    mDict[:SD]=mDict[:SEsq]*(sqrt(mDict[:N]))
+    mDict[:adj_dod] = ((dhh[:adj_mean_score1][1]-dhh[:adj_mean_score0][1])/dhh[:adj_mean_score0][1])*100 
+    mDict[:minval] = (mDict[:adj_dod]-(mDict[:SD]*4))/100
+    mDict[:maxval] = (mDict[:adj_dod]+(mDict[:SD]*4))/100
+    mDict[:minval] = mDict[:minval] < -0.6 ? -0.6 : mDict[:minval]
+    mDict[:maxval] = mDict[:maxval] > 0.6 ? 0.6 : mDict[:maxval]
     return mDict
 end
 
 
-function ConfidenceIntervals(dfx::DataFrame)
+function ConfidenceIntervals()
     mDict=collectModels(dfx,"GLM")
-    println("Running CI for : Total")
-    mDict[:metakey] = "Total Campaign"        
-    calcPValue_Opt(mDict)
-    CIs_O(mDict)
-    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:onetail_pval] = mDict[:onetail_pval]*100
-    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:twotail_pval] = mDict[:twotail_pval]*100
+    println("Running CI for : Total") 
+    #OPTPValue(mDict)
+    OPTCIs(mDict)
     dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:pval] = mDict[:pval]
+    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:coef] = mDict[:SEsq]
+    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:stderr] = mDict[:Bsum]
     for k in keys(ZDict)
         dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),Symbol(k*"_lb")] = mDict[Symbol(k*"_lb")]*100
         dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),Symbol(k*"_ub")] = mDict[Symbol(k*"_ub")]*100
@@ -1488,13 +1663,13 @@ function ConfidenceIntervals(dfx::DataFrame)
     for ranef in unique(dfx[(dfx[:modelType].=="GLMM"),:ranef])
         for level in unique(dfx[(dfx[:modelType].=="GLMM")&(dfx[:ranef].==ranef),:parameter])
             mDict=collectModels(dfx,"GLMM",ranef,level)
-            println("Running CI for : $ranef : $level")
-            mDict[:metakey] = ranef*"~"*level        
-            calcPValue_Opt(mDict)
-            CIs_O(mDict)
-            #dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:onetail_pval] = mDict[:onetail_pval]*100
-            #dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:twotail_pval] = mDict[:twotail_pval]*100
+            println("Running CI for : $ranef : $level")  
+            #OPTPValue(mDict)
+            OPTCIs(mDict)
             dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:pval] = mDict[:pval]
+            dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:adj_coef] = mDict[:Bsum]
+            dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:adj_stderr] = mDict[:SEsq]
+            println("!!!!!!!!!!!!",ranef,"!!!!!!!!!!!!",level,"!!!!!!!!!!!!!!!!!!!!!! ::: ",mDict[:Bsum]," ~~~ ",mDict[:SEsq] )
             for k in keys(ZDict)
                 dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),Symbol(k*"_lb")] = mDict[Symbol(k*"_lb")]*100
                 dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),Symbol(k*"_ub")] = mDict[Symbol(k*"_ub")]*100
@@ -1502,95 +1677,100 @@ function ConfidenceIntervals(dfx::DataFrame)
         end
     end
 end
-#ConfidenceIntervals(dfx)
-#dfx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
-#dfx[(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),[:model,:adj_dod_effct,:onetail_80_pct_intrvl_lb,:onetail_80_pct_intrvl_ub]]
- 
+ConfidenceIntervals()
             
-@everywhere function MP_collectModels(dfx::DataFrame, modelType::String,ranef::String="",level::String="") 
-    mDict = OrderedDict()
-    if modelType=="GLM"
-        o=dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="occ")&(dfx[:parameter].=="group"),:]
-        y=dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="dolocc")&(dfx[:parameter].=="group"),:]
-        p=dfx[(dfx[:modelType].=="GLM")&(dfx[:model].=="pen")&(dfx[:parameter].=="group"),:]
-    else
-        o=dfx[(dfx[:modelType].==modelType)&(dfx[:model].=="occ")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:]
-        y=dfx[(dfx[:modelType].==modelType)&(dfx[:model].=="dolocc")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:]
-        p=dfx[(dfx[:modelType].==modelType)&(dfx[:model].=="pen")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:]
-    end
-    mDict[:M]=p[:M][1]
-    mDict[:Mt]=p[:Mt][1]
-    mDict[:Mc]=p[:Mc][1]
-    mDict[:N]=p[:N][1]
-    mDict[:Nt]=p[:Nt][1]
-    mDict[:Nc]=p[:Nc][1]
-    if modelType=="GLM"
-        mDict[:B1]=o[:coef][1]   
-        mDict[:B2]=y[:coef][1]
-        mDict[:B3]=p[:coef][1] #fx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
-        mDict[:SE1]=o[:stderr][1]
-        mDict[:SE2]=y[:stderr][1]
-        mDict[:SE3]=p[:stderr][1] #fx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100S
-    else
-        mDict[:B1]=o[:adj_coef][1]   
-        mDict[:B2]=y[:adj_coef][1]
-        mDict[:B3]=p[:adj_coef][1] #fx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
-        mDict[:SE1]=o[:adj_stderr][1]
-        mDict[:SE2]=y[:adj_stderr][1]
-        mDict[:SE3]=p[:adj_stderr][1] #fx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100S
-    end
-    mDict[:o_SE0]=0
-    mDict[:y_SE0]=0
-    mDict[:p_SE0]=0
-    mDict[:o_B0]=0
-    mDict[:y_B0]=0
-    mDict[:p_B0]=0
-    mDict[:o_mean_score0]=o[:adj_mean_score0][1]
-    mDict[:o_mean_score1]=o[:adj_mean_score1][1]
-    mDict[:y_mean_score0]=y[:adj_mean_score0][1]
-    mDict[:y_mean_score1]=y[:adj_mean_score1][1]
-    mDict[:p_mean_score0]=p[:adj_mean_score0][1]
-    mDict[:p_mean_score1]=p[:adj_mean_score1][1]     
-    println("Running CI for : $ranef : $level")
-    mDict[:metakey] = ranef*"~"*level        
-    #calcPValue_Opt(mDict)
-    #CIs_O(mDict)
-    CIOx(mDict)
-    return mDict
+
+
+#function MPConfidenceIntervals(dfx::DataFrame)    
+#    mDict=collectModels(dfx,"GLM")
+#    @swarm :total OPTCIs(mDict)
+#    for ranef in unique(dfx[(dfx[:modelType].=="GLMM"),:ranef])
+#        for level in unique(dfx[(dfx[:modelType].=="GLMM")&(dfx[:ranef].==ranef),:parameter])
+#                rDict=collectModels(dfx,"GLMM",ranef,level)
+#                k = Symbol(ranef*"~"*level)
+#                @swarm k OPTCIs(rDict)
+#        end
+#    end
+#    sleep(20)
+#    while !iscompletew() println("Not Complete yet!"); sleep(5); end 
+#    zDict = takew(:total)
+#    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:pval] = zDict[:pval]
+#    for k in keys(ZDict)
+#        dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),Symbol(k*"_lb")] = zDict[Symbol(k*"_lb")]*100
+#        dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),Symbol(k*"_ub")] = zDict[Symbol(k*"_ub")]*100
+#    end
+#    for ranef in unique(dfx[(dfx[:modelType].=="GLMM"),:ranef])
+#        for level in unique(dfx[(dfx[:modelType].=="GLMM")&(dfx[:ranef].==ranef),:parameter])
+#                xDict = takew( Symbol(ranef*"~"*level) ) 
+#                dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:pval] = xDict[:pval]
+#                for k in keys(ZDict)
+#                    dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),Symbol(k*"_lb")] = xDict[Symbol(k*"_lb")]*100
+#                    dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),Symbol(k*"_ub")] = xDict[Symbol(k*"_ub")]*100
+#                end 
+#                println("*~*~*~*~*~*~~* : ",dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:twotail_80_pct_intrvl_ub][1]," ~~~~~~~~ ",xDict[:twotail_80_pct_intrvl_ub]*100)
+#                println(xDict)
+#        end
+#    end    
+#            return dfx
+#end  
+#MPConfidenceIntervals(dfx)
+
+        #dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="dolhh"),[:ranef,:parameter,:twotail_80_pct_intrvl_lb,:twotail_80_pct_intrvl_ub]]
+    
+#isdefined(:MP)&&(MP) ? MPConfidenceIntervals(dfx) : ConfidenceIntervals()
+
+
+#https://github.com/JuliaStats/Distributions.jl/blob/master/doc/source/starting.rst
+function Glivenko_Cantelli(d::OrderedDict)
+    pen_t = (d[:p_mean_score1]*(d[:Nt]/d[:N]))
+    pen_c = (d[:p_mean_score0]*(d[:Nc]/d[:N]))
+    occ_t = (d[:o_mean_score1]*(d[:Mt]/d[:M]))
+    occ_c = (d[:o_mean_score0]*(d[:Mc]/d[:M]))
+    dolocc_t = (d[:y_mean_score1]*(d[:Mt]/d[:M]))
+    dolocc_c = (d[:y_mean_score0]*(d[:Mc]/d[:M]))
+    dfm = DataFrame(Bocc=rand(Normal(d[:B1], d[:SE1]),1000000),Bdolocc=rand(Normal(d[:B2],d[:SE2]),1000000),Bpen=rand(Normal(d[:B3], d[:SE3]),1000000))
+    dfm[:expd] = ( (pen_t+pen_c.*exp(dfm[:Bpen])).*(occ_t+occ_c.*exp(dfm[:Bocc])).*(dolocc_t+dolocc_c.*exp(dfm[:Bdolocc]))  )
+    dfm[:ctrl] = ((pen_t.*exp(-dfm[:Bpen])+pen_c).*(occ_t.*exp(-dfm[:Bocc])+occ_c).*(dolocc_t.*exp(-dfm[:Bdolocc])+dolocc_c))
+    dfm[:diff] = dfm[:expd] .- dfm[:ctrl]
+    dfm[:adj_dod] = dfm[:diff] ./ dfm[:ctrl]
+    #println("80: ",quantile(dfm[:adj_dod],[0.10,0.90]))
+    #println("90: ",quantile(dfm[:adj_dod],[0.05,0.95]))            
+    quantile(dfm[:adj_dod], [0.05,0.95,0.10,0.90])
 end
 
+function GC_ConfidenceIntervals()
+    dfx[:GC_twotail_90_pct_intrvl_ub] = 0.0
+    dfx[:GC_twotail_90_pct_intrvl_lb] = 0.0
+    dfx[:GC_twotail_80_pct_intrvl_ub] = 0.0
+    dfx[:GC_twotail_80_pct_intrvl_lb] = 0.0
+    mDict=collectModels(dfx,"GLM")
+    println("Running CI for : Total")
+    mDict[:metakey] = "Total Campaign"        
+    Glivenko_Cantelli(mDict)
+    ci = Glivenko_Cantelli(mDict)
+    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:GC_twotail_90_pct_intrvl_lb] = ci[1]*100
+    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:GC_twotail_90_pct_intrvl_ub] = ci[2]*100
+    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:GC_twotail_80_pct_intrvl_lb] = ci[3]*100
+    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:GC_twotail_80_pct_intrvl_ub] = ci[4]*100
+    println(ci[1],":",ci[3],mDict[:adj_dod]," ~~ ",ci[4],":",ci[2])
+    for ranef in unique(dfx[(dfx[:modelType].=="GLMM"),:ranef])
+        for level in unique(dfx[(dfx[:modelType].=="GLMM")&(dfx[:ranef].==ranef),:parameter])
+            mDict=collectModels(dfx,"GLMM",ranef,level)
+            println("Running CI for : $ranef : $level")
+            mDict[:metakey] = ranef*"~"*level        
+            ci = Glivenko_Cantelli(mDict)
+            dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:GC_twotail_90_pct_intrvl_lb] = ci[1]*100
+            dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:GC_twotail_90_pct_intrvl_ub] = ci[2]*100
+            dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:GC_twotail_80_pct_intrvl_lb] = ci[3]*100
+            dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:GC_twotail_80_pct_intrvl_ub] = ci[4]*100
+            println(ci[1],":",ci[3],mDict[:adj_dod]," ~~ ",ci[4],":",ci[2])
+        end
+    end
+end
+GC_ConfidenceIntervals()
+            
+            
 
-function MP_ConfidenceIntervals(dfx::DataFrame)           
-    @swarm :total MP_collectModels(dfx, "GLM")
-    for ranef in unique(dfx[(dfx[:modelType].=="GLMM"),:ranef])
-        for level in unique(dfx[(dfx[:modelType].=="GLMM")&(dfx[:ranef].==ranef),:parameter])
-                k = Symbol(ranef*"~"*level)
-                @swarm k MP_collectModels(dfx, "GLMM",ranef,level)
-        end
-    end
-    sleep(20)
-    while !iscompletew() println("Not Complete yet!"); sleep(5); end 
-    mDict = takew(:total)
-#    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:onetail_pval] = mDict[:onetail_pval]*100
-#    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:twotail_pval] = mDict[:twotail_pval]*100
-    dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),:pval] = mDict[:pval]
-    for k in keys(ZDict)
-        dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),Symbol(k*"_lb")] = mDict[Symbol(k*"_lb")]*100
-        dfx[(dfx[:model].=="dolhh")&(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group"),Symbol(k*"_ub")] = mDict[Symbol(k*"_ub")]*100
-    end
-    for ranef in unique(dfx[(dfx[:modelType].=="GLMM"),:ranef])
-        for level in unique(dfx[(dfx[:modelType].=="GLMM")&(dfx[:ranef].==ranef),:parameter])
-                mDict = takew( Symbol(ranef*"~"*level) ) 
-                dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),:pval] = mDict[:pval]
-                for k in keys(ZDict)
-                    dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),Symbol(k*"_lb")] = mDict[Symbol(k*"_lb")]*100
-                    dfx[(dfx[:model].=="dolhh")&(dfx[:ranef].==ranef)&(dfx[:parameter].==level),Symbol(k*"_ub")] = mDict[Symbol(k*"_ub")]*100
-                end 
-        end
-    end    
-end       
-MP_ConfidenceIntervals(dfx)          
-    
 
   
 function pvalues2Campaign(dfx::DataFrame)
@@ -1637,7 +1817,9 @@ function pvalues2Campaign(dfx::DataFrame)
 end
 pvalues2Campaign(dfx)
         
-
+dfx = dfx[(dfx[:modelType].=="GLMM")|((dfx[:modelType].=="GLM")&(dfx[:parameter].=="group")),:]
+dfx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100            
+            
 function genReport(dfx::DataFrame)
     genHHCounts();
     dfx=deepcopy(dfx[(dfx[:modelType].=="GLM")&(dfx[:parameter].=="group")|(dfx[:modelType].=="GLMM"),:])
@@ -1650,10 +1832,17 @@ function genReport(dfx::DataFrame)
           :TWOTAIL_80_PCT_INTRVL_UB,:TWOTAIL_80_PCT_INTRVL_LB,:TWOTAIL_90_PCT_INTRVL_UB,:TWOTAIL_90_PCT_INTRVL_LB,
           :CNT_IMPRESSIONS,:TWOTAIL_PVAL_to_Campaign,:ONETAIL_PVAL_to_Campaign,:CNT_Model_HH
         ]
+     dfn=[ :model_desc, :empty,:empty_1, :empty_2, :empty_3, :model, :cnt_expsd_hh, :unadj_avg_expsd_hh_pre, :unadj_avg_cntrl_hh_pre,
+           :unadj_avg_expsd_hh_pst, :unadj_avg_cntrl_hh_pst, :unadj_dod_effct, :unadj_diff_effct, :adj_mean_score1, :adj_mean_score0,
+           :adj_dod_effct, :twotail_pval, :onetail_pval, :abs_diff, :dol_diff, :onetail_80_pct_intrvl_ub, :onetail_80_pct_intrvl_lb,
+           :onetail_90_pct_intrvl_ub, :onetail_90_pct_intrvl_lb, :twotail_80_pct_intrvl_ub, :twotail_80_pct_intrvl_lb,
+           :twotail_90_pct_intrvl_ub, :twotail_90_pct_intrvl_lb, :cnt_impressions, :twotail_pval_to_campaign,
+           :onetail_pval_to_campaign,:cnt_model_hh
+         ]
     #--
     dfx[isnan(dfx[:unadj_avg_expsd_hh_pre]),:unadj_avg_expsd_hh_pre] = 0.0  # Sometime there are no records for subset
     dfx[isnan(dfx[:unadj_avg_expsd_hh_pst]),:unadj_avg_expsd_hh_pst] = 0.0  # Sometime there are no records for subset
-    dfx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
+    #dfx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
     dfx[:unadj_dod_effct] = ( (( dfx[:unadj_avg_expsd_hh_pst] .- dfx[:unadj_avg_expsd_hh_pre]) .- (dfx[:unadj_avg_cntrl_hh_pst ] .- dfx[:unadj_avg_cntrl_hh_pre]))  ./  dfx[:unadj_avg_cntrl_hh_pst] ) *100
     dfx[:unadj_diff_effct] = ((dfx[:unadj_avg_expsd_hh_pst] .- dfx[:unadj_avg_cntrl_hh_pst]) ./ dfx[:unadj_avg_cntrl_hh_pst] )*100
     dfx[:model_desc] = dfx[:ranef]*" (".*dfx[:parameter]*")"
@@ -1681,8 +1870,9 @@ function genReport(dfx::DataFrame)
              :twotail_80_pct_intrvl_ub,:twotail_80_pct_intrvl_lb,:twotail_90_pct_intrvl_ub,:twotail_90_pct_intrvl_lb
              ,:cnt_impressions ,:twotail_pval_to_campaign,:onetail_pval_to_campaign ,:cnt_model_hh
         ]]
-    names!(dfr,rep)
-    
+    #names!(dfr,rep)
+    for i in 1:length(rep) rename!(dfr,dfn[i],rep[i]) end
+                
     #dfr[(dfr[:MODEL_DESC].=="Total Campaign")|(dfr[:dependent_variable].=="dolhh"),:TWOTAIL_PVAL_to_Campaign] = NaN
     #dfr[(dfr[:MODEL_DESC].=="Total Campaign")|(dfr[:dependent_variable].=="dolhh"),:ONETAIL_PVAL_to_Campaign] = NaN
     dfr[(dfr[:MODEL_DESC].=="Total Campaign"),:TWOTAIL_PVAL_to_Campaign] = NaN
@@ -1694,19 +1884,26 @@ end
 dfr = genReport(dfx)
 save_dfr(root, dfr)
 
-
+    
+#dfr[(dfr[:dependent_variable].=="dolhh"),[:MODEL_DESC,:ADJ_DOD_EFFCT,:ONETAIL_80_PCT_INTRVL_LB,:ONETAIL_80_PCT_INTRVL_UB]]
+#dfx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100
+#dfx[(dfx[:adj_dod_effct].<dfx[:onetail_80_pct_intrvl_lb])|(dfx[:adj_dod_effct].>dfx[:onetail_80_pct_intrvl_ub]),:]
+        
+#dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="dolhh")&(dfx[:ranef].=="campaign_name")&(dfx[:parameter].=="Halloween/Share_A_Smile"),:] 
+#dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="dolhh")&(dfx[:ranef].=="creative_size")&(dfx[:parameter].=="300x250/728x90"),:]            
             
             
             
-            
-            
-            
-       
             
             
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-# *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*- TESt CIs -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+# *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*- TESt PVAL & CIs -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+"""            
+            
+dfx[:adj_dod_effct] = ((dfx[:adj_mean_score1] .- dfx[:adj_mean_score0]) ./ dfx[:adj_mean_score0] ) *100            
+dfx[(dfx[:adj_dod_effct].<dfx[:onetail_80_pct_intrvl_lb])|(dfx[:adj_dod_effct].>dfx[:onetail_80_pct_intrvl_ub]),:]
+dfx[(dfx[:adj_dod_effct].<dfx[:onetail_80_pct_intrvl_lb])|(dfx[:adj_dod_effct].>dfx[:onetail_80_pct_intrvl_ub]),[:adj_dod_effct,:onetail_80_pct_intrvl_lb,:onetail_80_pct_intrvl_ub]]
             
 function ConfIntrvl()
     for row in eachrow(dfx)
@@ -1769,3 +1966,4 @@ dfx[(dfx[:modelType].=="GLMM")&(dfx[:model].=="occ")&(dfx[:ranef].=="creative_th
 dfx[(dfx[:adj_dod_effct].<dfx[:onetail_80_pct_intrvl_lb])|(dfx[:adj_dod_effct].>dfx[:onetail_80_pct_intrvl_ub]),[:adj_mean_score0,:adj_mean_score1,:Mt,:Mc,:N,:Nt,:Nc,:adj_coef,:adj_stderr,:adj_dod_effct,:onetail_80_pct_intrvl_lb,:onetail_80_pct_intrvl_ub]]
 
 
+"""

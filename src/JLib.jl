@@ -48,7 +48,8 @@ export
        isDict, isArray, isNum, isFloat, isInt, isSymbol,
        filler,
        ZDict, CIs_O, calcPValue_Opt     #, np_val,
-       dict2json, dict_Sym, mergeDict,  savejson, save_cfg, read_cfg
+       dict2json, dict_Sym, mergeDict,  savejson, save_cfg, read_cfg,
+       blank
  
 
 import Base: ==, *

@@ -186,9 +186,12 @@ function calcPValue_Opt(iDict::OrderedDict)
     ###### PVALUE - ONE & TWO ########
     m=nothing
     m = Model(solver=NLoptSolver(algorithm=:LD_MMA, maxtime=v_ttl))
-    @variable(m, Bocc <= B1)
-    @variable(m, Bdolocc <= B2)
-    @variable(m, Bpen <= B3)
+    #@variable(m, Bocc <= B1)
+    #@variable(m, Bdolocc <= B2)
+    #@variable(m, Bpen <= B3)
+    if B1 > 0 @variable(m, xBocc <= B1) else @variable(m, xBocc >= B1) end
+    if B2 > 0 @variable(m, xBdolocc <= B2) else @variable(m, xBdolocc >= B2) end
+    if B3 > 0 @variable(m, xBpen <= B3) else @variable(m, xBpen >= B3) end
     @objective(m, Max, (((Bocc+Bpen+Bdolocc)-Bsum)/SEsq ))
     @NLconstraint(m, 0.00000 <= ((((p_mean_score1*(Nt/N))+(p_mean_score0*exp(Bpen)*(Nc/N)))
 	                           * ((o_mean_score1*(Mt/M))+(o_mean_score0*exp(Bocc)*(Mc/M)))

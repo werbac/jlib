@@ -50,6 +50,30 @@ isSymbol{T<:Symbol}(::AbstractArray{T}) = true
 isSymbol(::Any) = false
 
 
+function blank(dfx::DataFrame,d::Dict=Dict())
+    arr = Any[]      
+    for (n, v) in eachcol(dfx)
+        if haskey(d,n)
+            arr = vcat(arr, [d[n]])  
+        else
+            if isFloat(v)
+                arr = vcat(arr, [0.0])
+            elseif isInt(v)
+                arr = vcat(arr, [0])
+            elseif isString(v)
+                arr = vcat(arr, [""])
+            elseif isBool(v)
+                        arr = vcat(arr, [false])
+            elseif isSymbol(v)
+                        arr = vcat(arr, [:empty])
+            else
+                println("ERROR : datatype Not Found!!!!!!!!")
+            end
+        end     
+    end 
+    return  arr
+end 
+
 
 Base.lowercase(df::DataFrame) = names!(df, map(x->Symbol(lowercase(string(x))),names(df)))
 Base.lowercase(da::DataArray{String}) = [lowercase(x) for x in da]
