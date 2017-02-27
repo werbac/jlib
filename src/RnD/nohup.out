@@ -68,3 +68,133 @@
 [W 03:53:51.048 LabApp] WebSocket ping timeout after 119889 ms.
 [W 03:53:52.272 LabApp] WebSocket ping timeout after 119929 ms.
 [W 03:54:08.788 LabApp] WebSocket ping timeout after 119931 ms.
+[W 22:20:57.771 LabApp] WebSocket ping timeout after 119946 ms.
+[W 22:20:58.432 LabApp] WebSocket ping timeout after 119949 ms.
+[W 22:20:58.582 LabApp] WebSocket ping timeout after 119921 ms.
+[W 22:20:58.770 LabApp] WebSocket ping timeout after 119949 ms.
+[W 22:20:58.897 LabApp] WebSocket ping timeout after 119946 ms.
+[W 22:20:59.058 LabApp] WebSocket ping timeout after 119942 ms.
+[W 04:19:18.738 LabApp] WebSocket ping timeout after 119921 ms.
+[W 04:19:19.280 LabApp] WebSocket ping timeout after 119629 ms.
+[W 04:19:19.934 LabApp] WebSocket ping timeout after 119923 ms.
+[W 04:19:20.447 LabApp] WebSocket ping timeout after 119929 ms.
+[W 04:19:20.942 LabApp] WebSocket ping timeout after 119892 ms.
+[W 04:19:21.425 LabApp] WebSocket ping timeout after 119332 ms.
+[W 12:54:25.140 LabApp] WebSocket ping timeout after 119926 ms.
+[W 12:54:25.298 LabApp] WebSocket ping timeout after 119929 ms.
+[W 12:54:25.556 LabApp] WebSocket ping timeout after 119921 ms.
+[W 12:54:25.736 LabApp] WebSocket ping timeout after 119927 ms.
+[W 12:54:25.922 LabApp] WebSocket ping timeout after 119926 ms.
+[W 12:54:26.084 LabApp] WebSocket ping timeout after 119929 ms.
+[I 20:27:38.169 LabApp] Creating new notebook in /reg
+[W 20:27:57.473 LabApp] delete /reg/Untitled.ipynb
+[I 20:28:02.300 LabApp] Creating new file in /reg
+[I 20:28:14.056 LabApp] Saving file at /reg/ZD.txt
+[I 20:39:24.439 LabApp] Creating new notebook in /reg
+[I 20:39:28.315 LabApp] Saving file at /reg/Untitled.ipynb
+[I 20:39:28.415 LabApp] Kernel started: 70cb9a1b-3e13-41ee-98ed-d5cf3adeb894
+[I 20:39:38.015 LabApp] Creating new notebook in /ZD/KStest
+[I 20:39:47.988 LabApp] Kernel started: 474e6956-c8aa-44f2-bcf6-d67ad43d1a52
+[I 20:41:28.890 LabApp] Saving file at /reg/Untitled.ipynb
+[I 20:41:48.392 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 20:43:48.806 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 20:45:49.874 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 20:47:50.235 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 20:49:50.818 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 20:51:52.036 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 22:04:17.090 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 22:18:20.099 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 22:19:06.432 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 22:21:06.892 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 23:11:07.506 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 23:23:09.268 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 23:25:09.981 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 23:27:10.600 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 23:29:11.244 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 23:31:11.681 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 23:33:12.619 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[I 23:35:14.118 LabApp] Saving file at /ZD/KStest/KSeval.ipynb
+[W 00:37:03.385 LabApp] WebSocket ping timeout after 119946 ms.
+[W 00:37:03.541 LabApp] WebSocket ping timeout after 119949 ms.
+[W 00:37:03.672 LabApp] WebSocket ping timeout after 119947 ms.
+[W 00:37:15.467 LabApp] WebSocket ping timeout after 119948 ms.
+[W 00:37:15.977 LabApp] WebSocket ping timeout after 119947 ms.
+[W 00:37:16.097 LabApp] WebSocket ping timeout after 119949 ms.
+[W 00:37:20.730 LabApp] WebSocket ping timeout after 119944 ms.
+[W 00:37:29.051 LabApp] WebSocket ping timeout after 119947 ms.
+[W 04:49:41.068 LabApp] WebSocket ping timeout after 119928 ms.
+[W 04:49:41.288 LabApp] WebSocket ping timeout after 119924 ms.
+[W 04:49:41.471 LabApp] WebSocket ping timeout after 119924 ms.
+[W 04:49:41.689 LabApp] WebSocket ping timeout after 119930 ms.
+[W 04:49:41.973 LabApp] WebSocket ping timeout after 119906 ms.
+[W 04:49:42.153 LabApp] WebSocket ping timeout after 119924 ms.
+[W 04:49:42.338 LabApp] WebSocket ping timeout after 119927 ms.
+[W 04:49:42.501 LabApp] WebSocket ping timeout after 119923 ms.
+[W 14:27:17.885 LabApp] WebSocket ping timeout after 119916 ms.
+[W 14:27:19.111 LabApp] WebSocket ping timeout after 119921 ms.
+[W 14:27:19.808 LabApp] WebSocket ping timeout after 119924 ms.
+[W 14:27:20.173 LabApp] WebSocket ping timeout after 119929 ms.
+[W 14:27:20.658 LabApp] WebSocket ping timeout after 119924 ms.
+[W 14:27:20.864 LabApp] WebSocket ping timeout after 119923 ms.
+[W 14:27:22.279 LabApp] WebSocket ping timeout after 119923 ms.
+[W 14:27:22.968 LabApp] WebSocket ping timeout after 119929 ms.
+[W 22:25:06.408 LabApp] WebSocket ping timeout after 119950 ms.
+[W 22:25:06.972 LabApp] WebSocket ping timeout after 119949 ms.
+[W 22:25:07.328 LabApp] WebSocket ping timeout after 119947 ms.
+[W 22:25:07.879 LabApp] WebSocket ping timeout after 119950 ms.
+[W 22:25:10.608 LabApp] WebSocket ping timeout after 119941 ms.
+[W 04:32:06.653 LabApp] WebSocket ping timeout after 119930 ms.
+[W 04:32:06.814 LabApp] WebSocket ping timeout after 119928 ms.
+[W 04:32:07.153 LabApp] WebSocket ping timeout after 119927 ms.
+[W 04:32:07.525 LabApp] WebSocket ping timeout after 119924 ms.
+[W 04:32:07.803 LabApp] WebSocket ping timeout after 119930 ms.
+[W 05:29:56.705 LabApp] WebSocket ping timeout after 119927 ms.
+[W 05:29:56.864 LabApp] WebSocket ping timeout after 119927 ms.
+[W 05:29:57.027 LabApp] WebSocket ping timeout after 119929 ms.
+[W 05:29:57.211 LabApp] WebSocket ping timeout after 119927 ms.
+[W 05:29:57.383 LabApp] WebSocket ping timeout after 119928 ms.
+[W 14:45:00.264 LabApp] WebSocket ping timeout after 119915 ms.
+[W 14:45:00.520 LabApp] WebSocket ping timeout after 119922 ms.
+[W 14:45:28.861 LabApp] WebSocket ping timeout after 119922 ms.
+[W 14:45:29.315 LabApp] WebSocket ping timeout after 119927 ms.
+[W 14:45:29.820 LabApp] WebSocket ping timeout after 119871 ms.
+[W 01:38:40.516 LabApp] WebSocket ping timeout after 119927 ms.
+[W 01:38:40.658 LabApp] WebSocket ping timeout after 119930 ms.
+[W 01:38:40.803 LabApp] WebSocket ping timeout after 119934 ms.
+[W 01:38:40.939 LabApp] WebSocket ping timeout after 119943 ms.
+[W 01:38:41.084 LabApp] WebSocket ping timeout after 119942 ms.
+[W 06:04:27.090 LabApp] WebSocket ping timeout after 119926 ms.
+[W 06:04:27.262 LabApp] WebSocket ping timeout after 119927 ms.
+[W 06:04:27.436 LabApp] WebSocket ping timeout after 119921 ms.
+[W 06:04:27.599 LabApp] WebSocket ping timeout after 119927 ms.
+[W 06:04:27.797 LabApp] WebSocket ping timeout after 119925 ms.
+[W 18:25:09.444 LabApp] WebSocket ping timeout after 119925 ms.
+[W 18:25:09.695 LabApp] WebSocket ping timeout after 119927 ms.
+[W 18:25:10.038 LabApp] WebSocket ping timeout after 119903 ms.
+[W 18:25:10.454 LabApp] WebSocket ping timeout after 119926 ms.
+[W 18:25:10.891 LabApp] WebSocket ping timeout after 119920 ms.
+[W 00:15:51.647 LabApp] WebSocket ping timeout after 119930 ms.
+[W 00:15:51.785 LabApp] WebSocket ping timeout after 119935 ms.
+[W 00:15:51.920 LabApp] WebSocket ping timeout after 119943 ms.
+[W 00:15:52.055 LabApp] WebSocket ping timeout after 119942 ms.
+[W 00:15:52.195 LabApp] WebSocket ping timeout after 119944 ms.
+[W 03:25:10.143 LabApp] WebSocket ping timeout after 119928 ms.
+[W 03:25:11.373 LabApp] WebSocket ping timeout after 119926 ms.
+[W 03:25:13.832 LabApp] WebSocket ping timeout after 119928 ms.
+[W 03:25:14.511 LabApp] WebSocket ping timeout after 119919 ms.
+[W 03:25:15.147 LabApp] WebSocket ping timeout after 119921 ms.
+[W 21:27:22.808 LabApp] WebSocket ping timeout after 119939 ms.
+[W 21:27:30.235 LabApp] WebSocket ping timeout after 119924 ms.
+[W 21:27:30.409 LabApp] WebSocket ping timeout after 119935 ms.
+[W 21:27:32.702 LabApp] WebSocket ping timeout after 119938 ms.
+[W 21:27:32.853 LabApp] WebSocket ping timeout after 119936 ms.
+[W 15:03:53.689 LabApp] WebSocket ping timeout after 119921 ms.
+[W 15:03:53.873 LabApp] WebSocket ping timeout after 119919 ms.
+[W 15:03:54.045 LabApp] WebSocket ping timeout after 119923 ms.
+[W 15:03:54.218 LabApp] WebSocket ping timeout after 119897 ms.
+[W 15:03:54.390 LabApp] WebSocket ping timeout after 119924 ms.
+[W 22:55:38.584 LabApp] WebSocket ping timeout after 119931 ms.
+[W 22:55:38.705 LabApp] WebSocket ping timeout after 119932 ms.
+[W 22:55:38.826 LabApp] WebSocket ping timeout after 119925 ms.
+[W 22:55:38.945 LabApp] WebSocket ping timeout after 119933 ms.
+[W 22:55:39.064 LabApp] WebSocket ping timeout after 119932 ms.
