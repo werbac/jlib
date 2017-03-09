@@ -50,6 +50,52 @@ isSymbol{T<:Symbol}(::AbstractArray{T}) = true
 isSymbol(::Any) = false
 
 
+
+
+
+function dfcor(dfr::DataFrame, cols::Vector{Symbol}) 
+    nms = Symbol[] 
+    arr = Float64[] 
+    for (n, v) in eachcol(dfr) 
+        if n ∈ cols && isNum(v) 
+            push!(nms, n) 
+            append!(arr, v) 
+        end 
+    end 
+    result = NamedArray(cor(reshape(arr, (size(dfr, 1), length(nms))))) 
+    NamedArrays.setnames!(result, string.(nms), 1) 
+    NamedArrays.setnames!(result, string.(nms), 2) 
+    result 
+end 
+dfcor(dfr::DataFrame) = dfcor(dfr, names(dfr))
+  
+function dfcor1(dfr::DataFrame, cols::Vector{Symbol}) 
+    m = size(dfr, 1) 
+    nms = Symbol[] 
+    arr = ones(m) 
+    for (n, v) in eachcol(dfr) 
+        if n ∈ cols && isNum(v) 
+            push!(nms, n) 
+            append!(arr, v) 
+        end 
+    end 
+    n = length(nms) + 1 
+    R = full(UpperTriangular(view(qrfact!(reshape(arr, (m, n)))[:R], 2:n, 2:n))) 
+    for j in 1:size(R, 2) 
+        colj = view(R, 1:j, j) 
+        colj ./= norm(colj) 
+    end 
+    Rt = UpperTriangular(R) 
+    result = NamedArray(Rt'Rt) 
+    NamedArrays.setnames!(result, string.(nms), 1) 
+    NamedArrays.setnames!(result, string.(nms), 2) 
+    result 
+end 
+dfcor1(dfr::DataFrame) = dfcor1(dfr, names(dfr))    
+    
+
+
+
 function blank(dfx::DataFrame,d::Dict=Dict())
     arr = Any[]      
     for (n, v) in eachcol(dfx)

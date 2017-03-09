@@ -1,41 +1,7 @@
-using JuMP;
-using Ipopt;
-using DataFrames;
-my_table = readtable("/home/iriadmin/g/jlib/src/StatOpt/newdata.csv")
-( N, K1 ) = size( my_table )
-m = Model(solver=IpoptSolver())
-@defVar( m, 0.0 <= b[1:(K1-1)] <= 100.0 ) 
-@NLobjective( m, Min, sum{ ( my_table[i,1] - sum{ my_table[i,j] * b[ j - 1] , j in 2:K1} )^2 , i in 1:N} )
-statusM = solve( m )
-df = DataFrame( beta = getvalue( b ) )
 
 
-
-# ----------------------- GT LOGISTIC --------------------------------
-using JuMP,Ipopt,DataFrames, GLM
-m=nothing
-m = Model(solver=IpoptSolver())  # sum( -1 * y .* (x*beta) + log(1+exp((x*beta))) )
-dfd = readtable("/home/iriadmin/g/jlib/src/StatOpt/logreg.csv")
-x = Array(dfd[:,2:end])
-y = Array(dfd[:,1])
-(rows, cols) = size(x)
-g = glm(y ~ -1 + x0 + x1 + x2 + x3 + x4 + x6 + x7, dfd,  Bernoulli(), LogitLink()) # X0 s the replacement for intercept - otherwise glm will generate a [1...] arr
-@variable(m, B[z=1:cols], start=0)  # getvalue(B)  @defVar( m, 0.0 <= b[1:(K1-1)] <= 100.0 )
-@NLobjective( m, Min, sum{ ( -1*y[r]*sum{x[r,c]*B[c],c in 1:cols} ) + log(1+exp(sum{x[r,cc]*B[cc],cc in 1:cols})) ,r in 1:rows} )  
-#..... sum( -1 * y .* (x*B) + log(1+exp((x*B))) )
-
-d = JuMP.NLPEvaluator(m)
-MathProgBase.initialize(d, [:Grad,:HessVec,:Hess])
-statusM = solve( m )  #statusM = solve( m, IpoptOptions=[("tol",1e-6)] )
-df = DataFrame( beta = getvalue( B ) )
-
-d = JuMP.NLPEvaluator(m)
-MathProgBase.initialize(d, [:Grad,:HessVec,:Hess])
-hess = MathProgBase.hesslag_structure(d)
-diag(hess)
-beta_se <- sqrt( diag( var_cov_m ) )
-
-# -----------------------------solution ------------------------
+# --------- SOLUTION --------------------------------------------
+# ----------------------------- LOGISIC ------------------------
 using JuMP,Ipopt,DataFrames, GLM, ForwardDiff
 m=nothing
 m = Model(solver=IpoptSolver())  # sum( -1 * y .* (x*beta) + log(1+exp((x*beta))) )
@@ -85,7 +51,10 @@ sqrt(diag(inv(ForwardDiff.hessian(mynllf,getvalue(B)))))
 
 
 
-# ----------------------- GAMMA --------------------------------
+
+
+
+# ----------------------- GAMMA - WORKING On THIS --------------------------------
 using JuMP,Ipopt,DataFrames, GLM
 m=nothing
 m = Model(solver=IpoptSolver()) 
@@ -153,8 +122,52 @@ rownames( coeff_outputs ) <- c()
 print( coeff_outputs )
 summary( myglm )$coefficients
 
+# --------- SOLUTION END --------------------------------------------
 
 
 
 
+
+
+
+# ----------------------------------------------------------------------
+# -------- OLD WORKING.... but wrong -----------------------------------
+# ----------------------------------------------------------------------
+
+using JuMP;
+using Ipopt;
+using DataFrames;
+my_table = readtable("/home/iriadmin/g/jlib/src/StatOpt/newdata.csv")
+( N, K1 ) = size( my_table )
+m = Model(solver=IpoptSolver())
+@defVar( m, 0.0 <= b[1:(K1-1)] <= 100.0 ) 
+@NLobjective( m, Min, sum{ ( my_table[i,1] - sum{ my_table[i,j] * b[ j - 1] , j in 2:K1} )^2 , i in 1:N} )
+statusM = solve( m )
+df = DataFrame( beta = getvalue( b ) )
+
+
+
+# ----------------------- GT LOGISTIC --------------------------------
+using JuMP,Ipopt,DataFrames, GLM
+m=nothing
+m = Model(solver=IpoptSolver())  # sum( -1 * y .* (x*beta) + log(1+exp((x*beta))) )
+dfd = readtable("/home/iriadmin/g/jlib/src/StatOpt/logreg.csv")
+x = Array(dfd[:,2:end])
+y = Array(dfd[:,1])
+(rows, cols) = size(x)
+g = glm(y ~ -1 + x0 + x1 + x2 + x3 + x4 + x6 + x7, dfd,  Bernoulli(), LogitLink()) # X0 s the replacement for intercept - otherwise glm will generate a [1...] arr
+@variable(m, B[z=1:cols], start=0)  # getvalue(B)  @defVar( m, 0.0 <= b[1:(K1-1)] <= 100.0 )
+@NLobjective( m, Min, sum{ ( -1*y[r]*sum{x[r,c]*B[c],c in 1:cols} ) + log(1+exp(sum{x[r,cc]*B[cc],cc in 1:cols})) ,r in 1:rows} )  
+#..... sum( -1 * y .* (x*B) + log(1+exp((x*B))) )
+
+d = JuMP.NLPEvaluator(m)
+MathProgBase.initialize(d, [:Grad,:HessVec,:Hess])
+statusM = solve( m )  #statusM = solve( m, IpoptOptions=[("tol",1e-6)] )
+df = DataFrame( beta = getvalue( B ) )
+
+d = JuMP.NLPEvaluator(m)
+MathProgBase.initialize(d, [:Grad,:HessVec,:Hess])
+hess = MathProgBase.hesslag_structure(d)
+diag(hess)
+beta_se <- sqrt( diag( var_cov_m ) )
 

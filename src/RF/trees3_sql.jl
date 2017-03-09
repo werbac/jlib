@@ -1,8 +1,4 @@
 
-
-
-
-
 select count(a.household_id), count(distinct a.household_id), b.operating_company
 from wh_supplmental.household_dependent_id_map a 
 join wh_fsp.partitioned_fsp_wkly_fact b 

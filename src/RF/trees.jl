@@ -1,3 +1,17 @@
+# ---------------NEW ------------------
+using DataFrames
+dfd=readtable("orig.csv")
+names!(dfd,[Symbol(replace(string(n),"jennie_rf_pos_exposure2_","")) for n in names(dfd)])
+rename!(dfd,Symbol("3rdparty"),:thirdparty)
+
+
+
+# --------------- NEW END -----------------
+
+
+
+
+
 # ---------------- REMOVE OTLIERS -------------
 using DataFrames
 dfd=readtable("out.csv")
@@ -172,6 +186,8 @@ select distinct(data_supplier) from WH_SUPPLMENTAL.HOUSEHOLD_DEPENDENT_ID_MAP;
 
 # ========================================================== DATASET AGREGATION =============================================
 
+                                
+# ================ START HERE ==============================
 export JULIA_NUM_THREADS=4
 
 
@@ -197,10 +213,8 @@ addprocs(1)
 #using DataStructures, DataFrames, StatsFuns, GLM , JuMP,NLopt, HDF5, JLD, Distributions, MixedModels, RCall, StatsBase, xCommon, Feather
 using DataFrames
 
-
-
 #dfd = readtable("/mnt/resource/analytics/trees/exposure.csv",header=false);
-dfd = readtable("/mapr/mapr04p/analytics0001/analytic_users/Models/RF/RF.csv",header=true);
+dfd = readtable("orig.csv",header=true);
 #names!(dfdx, [:household_id, :iri_week, :date1, :creative_id, :placement_id, :gross_imps, :val_imps ,:placement, :creative, :publisher] )
 #names!(dfd, [:hh_id, :week, :date, :creative_id, :placement_id, :gross_imps, :imps ,:placement, :creative, :publisher] )   
 names!(dfd,[Symbol(replace(string(n),"jennie_rf_pos_exposure2_","")) for n in names(dfd)])
@@ -211,7 +225,10 @@ rename!(dfd,:household_id, :panid )
 
 #dfd[:household_id]
 dformat = Dates.DateFormat("y-m-d"); 
-dfd[:date] = map(x-> x=="NULL" ? NA : Date(replace(x, " 00:00:00",""),dformat), dfd[:date1])
+#dfd[:date] = map(x-> x=="NULL" ? NA : Date(replace(x, " 00:00:00",""),dformat), dfd[:date1])
+dfd[:date] = map(x-> Date(string(x),Dates.DateFormat("yyyymmdd") ), dfd[:date1])
+                               
+                                
 dfd = dfd[!isna(dfd[:date]),:]
 dfd[:date] = convert(Array{Date},dfd[:date])
 dfd[:datelag] = dfd[:date] .- Dates.Day(7)
@@ -240,7 +257,7 @@ dfd[:datenumlag] = map(x->Int64(x),dfd[:datelag])
 panlst = unique(dfd[:panid])
 panchunks=DataFrame( panid=panlst,chunks=-1 )
 panlen=length(panlst)
-chunksize = Int(floor(length(hhlst)/100))
+chunksize = Int(floor(length(panlst)/100))
 chunknum=1
 while (chunknum*chunksize) <= panlen
     s=chunknum*chunksize
@@ -376,6 +393,8 @@ end
 """
 
 x=99
+x=59
+                                
 for p in 2:11
     x=x+1
     @async remotecall_fetch(genLags, p,  x)

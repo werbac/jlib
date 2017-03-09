@@ -43,6 +43,7 @@ export
        relevel,
        profileθ,
        readModels, expandM,  #saveModels,
+       dfcor1, dfcor,
        read_dfx, save_dfx, read_modelsDict, save_modelsDict, read_dfd, save_dfd, read_dfr, save_dfr, read_orig,
        isnumeric, isfloat, isint, isString, isBool, 
        isDict, isArray, isNum, isFloat, isInt, isSymbol,

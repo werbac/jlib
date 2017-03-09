@@ -187,10 +187,12 @@ end
 """
     
 
-function read_orig(root::String)
+function read_orig(root::String=pwd(),useGC::Bool=true)
+    if !useGC gc_enable(false); end
     df_data = readtable(root*"/orig.csv",header=false);
     df_h = readtable(root*"/origHead.csv",header=false);  
     names!(df_data, convert(Array{Symbol}, df_h[:x1]) )
+    if !useGC gc_enable(true); end
     return df_data
 end
 
