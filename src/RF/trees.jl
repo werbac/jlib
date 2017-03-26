@@ -404,13 +404,13 @@ end
 # ---------------- de-chunk files ----------------------
 using DataFrames
 root="/mapr/mapr04p/analytics0001/analytic_users/Models/RF/chunks"
-dfx = readtable(root*"/1_out.csv",header=true); 
+#dfx = readtable(root*"/1_out.csv",header=true); 
 
-for i in 31:60   #2:101
-    println("Loading : ",i,"_out.csv")
-    t = readtable(root*"/"*string(i)*"_out.csv",header=true); 
-    dfx=vcat(dfx,t)
-end
+#for i in 31:60   #2:101
+#    println("Loading : ",i,"_out.csv")
+#    t = readtable(root*"/"*string(i)*"_out.csv",header=true); 
+#    dfx=vcat(dfx,t)
+#end
 
 #writetable(root*"/1_60_tmp.csv", dfx)
 

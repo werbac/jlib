@@ -1,4 +1,3 @@
-#sed -i  's/\\N/0/g' orig.csv
 ENV["JULIA_PKGDIR"] = "/mapr/mapr04p/analytics0001/analytic_users/jpkg" 
 @everywhere insert!(Base.LOAD_CACHE_PATH, 1, "/mapr/mapr04p/analytics0001/analytic_users/jpkg/lib/v0.5")
 @everywhere pop!(Base.LOAD_CACHE_PATH)
@@ -7,8 +6,53 @@ using DataStructures, DataArrays , DataFrames, StatsFuns, GLM , Distributions, M
 root = !isdefined(:root) ? pwd() : root
 MP = !isdefined(:MP) ? false : MP
 
+#greps(a::Array,s::String) = a[[contains(string(v),s) for v in a]]
+#vars=setdiff(vars,greps(vars,"_po_"))
+#dfd=dfd[setdiff(names(dfd),vcat(greps(vars,"_vol_"),greps(vars,"_po_")))]
 
-function getCFG()
+"""
+type Z
+end
+
+t=OrderedDict()
+
+function x()
+    xo=Dict()
+    if :exposed_flag in names(dfd)  xo=countmap(dfd[:exposed_flag])
+    elseif :iso in names(dfd) xo=countmap(dfd[(dfd[:iso].==false),:exposed_flag])
+    else xo=countmap(dfd[:exposed_flag])
+end
+xo[:pst_occ]=mean(dfd[ (dfd[:Buyer_Pos_P1].==1) & (dfd[:exposed_flag].==1), :Trps_POS_P1] )
+xo[:pst_dolocc]=mean(dfd[ (dfd[:Buyer_Pos_P1].==1) & (dfd[:exposed_flag].==1), :Dol_per_Trip_POS_P1] )
+xo[:pst_pen]=mean(dfd[(dfd[:exposed_flag].==1), :buyer_pos_p1])
+xo[:pre_occ]=mean(dfd[ (dfd[:Buyer_Pre_P1].==1) & (dfd[:exposed_flag].==1), :Trps_PRE_P1] )
+xo[:pre_occ]=mean(dfd[ (dfd[:Buyer_Pre_P1].==1) & (dfd[:exposed_flag].==1), :Dol_per_Trip_PRE_P1] )
+xo[:pre_occ]=mean(dfd[  (dfd[:exposed_flag].==1), :Buyer_Pre_P1] )
+return xo
+end
+
+
+
+function z()
+    xo=Dict()
+    if :exposed_flag in names(dfd)  xo=countmap(dfd[:exposed_flag])
+    elseif :iso in names(dfd) xo=countmap(dfd[(dfd[:iso].==false),:exposed_flag])
+    else xo=countmap(dfd[:exposed_flag])
+end
+xo[:pst_occ]=mean(dfd[ (dfd[:buyer_pos_p1].==1) & (dfd[:group].==1), :trps_pos_p1] )
+xo[:pst_dolocc]=mean(dfd[ (dfd[:buyer_pos_p1].==1) & (dfd[:group].==1), :dol_per_trip_pos_p1] )
+xo[:pst_pen]=mean(dfd[(dfd[:group].==1), :buyer_pos_p1])
+xo[:pre_occ]=mean(dfd[ (dfd[:buyer_pre_p1].==1) & (dfd[:group].==1), :trps_pre_p1] )
+xo[:pre_occ]=mean(dfd[ (dfd[:buyer_pre_p1].==1) & (dfd[:group].==1), :dol_per_trip_pre_p1] )
+xo[:pre_occ]=mean(dfd[  (dfd[:group].==1), :buyer_pre_p1] )
+return xo
+end
+
+t[:a]=z()
+"""
+
+
+function getCFG_v1()
     const cfgDefaults=OrderedDict( :P2_Competitor => true
                         ,:pvalue_lvl => 0.20
                         ,:exposed_flag_var => :exposed_flag
@@ -29,24 +73,32 @@ function getCFG()
     cfg[:dolocc_logvar_colname] = Symbol("LOG_"*string(cfg[:dolocc_logvar]))
     cfg[:pen_logvar_colname] = Symbol("LOG_"*string(cfg[:pen_logvar]))
     cfg[:all_mandatory_vars] = vcat( [:experian_id, cfg[:pen_y_var],cfg[:pen_logvar], cfg[:occ_y_var], cfg[:occ_logvar], cfg[:dolocc_y_var], cfg[:dolocc_logvar] ], cfg[:random_demos] )
+    # TEmp hack to fix data
+    cfg[:dropvars] = vcat(cfg[:dropvars],[:person_1_combined_age,:person_1_marital_status,:household_composition,:person_1_person_type,:homeowner_combined_homeowner, :dwelling_type,:dwelling_Un_size,:mail_responder,:cape_tenancy_occhu_pct_owner_occupied,:cape_tenancy_occhu_pct_renter_occupied,:cape_hhsize_hh_average_household_size,:cape_density_persons_per_hh_for_pop_in_hh,:cape_homval_oohu_median_home_value,:cape_hustr_hu_pct_mobile_home,:cape_built_hu_median_housing_un_age,:cape_lang_hh_pct_spanish_speaking,:cape_educ_pop25_plus_median_education_attained,:cape_inc_hh_median_family_household_income,:cape_educ_ispsa_decile,:cape_inc_family_inc_state_decile,
+    :row_idx
+    ] 
+    
+    ) 
     return cfg
 end
+getCFG() = getCFG_v1()
 cfg=getCFG()
 
-dfd=read_orig(root,false)
+#dfd=read_orig(root,false)
+dfd=readtable("reduced_data.csv")
 
 
-
-function isValid(dfd::DataFrame,cfg::OrderedDict)
+function isValid_v1(dfd::DataFrame,cfg::OrderedDict)
     checkValid(iarr::Array{Symbol}) = length(setdiff(iarr, names(dfd))) > 0 ? false : true
     checkValid(iSym::Symbol) = iSym in names(dfd)
     !checkValid(cfg[:all_mandatory_vars]) ? error("ERROR: Not all mandatory_vars in dataset ") : println("VALID : mandatory_vars") 
     !checkValid(cfg[:scoring_vars]) ? error("ERROR: Not all scoring_vars in dataset ") : println("VALID : scoring_vars") 
     !checkValid(cfg[:ProScore]) ? error("ERROR: Invalid ProScore ") : println("VALID : ProScore") 
 end
+isValid(dfd,cfg) = isValid_v1(dfd,cfg)
 isValid(dfd,cfg)
 
-function reworkCFG!(dfd::DataFrame,cfg::OrderedDict)
+function reworkCFG_v1(dfd::DataFrame,cfg::OrderedDict)
     if !haskey(cfg,:ProScore)
         ps = filter(x->contains(string(x), "MODEL"), names(dfd)) 
         cfg[:ProScore] = length(ps) > 0 ? ps[1] : :MISSING_MODEL_VARIABLE_IN_DATA
@@ -85,11 +137,17 @@ function reworkCFG!(dfd::DataFrame,cfg::OrderedDict)
     end
     return vcat(features,[:Prd_0_Net_Pr_PRE]) 
 end
+reworkCFG!(dfd::DataFrame,cfg::OrderedDict) = reworkCFG_v1(dfd,cfg) 
 DSvars = reworkCFG!(dfd,cfg)
 
 
-#sed -i  's/\\N/"\\N"/g' orig.csv
-function dataPrep(dfd::DataFrame)
+
+
+
+
+
+
+function PrepVars_v1(dfd::DataFrame)
     dfd[:iso]=false
     for col in [cfg[:occ_y_var],cfg[:occ_logvar],cfg[:pen_y_var],cfg[:pen_logvar], :Buyer_Pre_P0, :group ]
         if typeof(dfd[col]) in [DataArray{String,1}]
@@ -138,11 +196,13 @@ function dataPrep(dfd::DataFrame)
         dfd[ (dfd[:iso].==false) & (dfd[r].=="none") & (dfd[:group].!=0) ,:iso] = true
     end
 end
+dataPrep(dfd::DataFrame) = PrepVars_v1(dfd)
 println("pre_dataPrep")
 dataPrep(dfd)
 
+
 println("Pre_3STD_out")
-function Pre_3STD_out(dfd::DataFrame)
+function Pre_3STD_out_v1(dfd::DataFrame)
     df_cat_pre = dfd[(dfd[:iso].==false)&(dfd[:Buyer_Pre_P0] .==1) , [:Prd_0_Net_Pr_PRE,:panid]]
     df_cat_pos = dfd[(dfd[:iso].==false)&(dfd[:Buyer_Pre_P0] .==0) & (dfd[:Buyer_Pos_P0] .==1) , [:panid]]
     median_df = median(df_cat_pre[:Prd_0_Net_Pr_PRE])
@@ -156,10 +216,31 @@ function Pre_3STD_out(dfd::DataFrame)
     rows2remove = setdiff(dfd[dfd[:iso].==false, :panid],df_cat_pre_zsc_f[:panid])
     dfd[findin(dfd[:panid],rows2remove),:iso]=true
 end
-Pre_3STD_out(dfd);
+Pre_3STD_out(dfd::DataFrame) = Pre_3STD_out_v1(dfd)
+#Pre_3STD_out(dfd); 
+ 
+function Pre_3STD_out_v2(dfd::DataFrame,col::Symbol,stddev::Float64)
+    df_cat_pre = dfd[(dfd[:Buyer_Pre_P0] .==1) , [col,:panid]]
+    df_cat_pos = dfd[(dfd[:Buyer_Pre_P0] .==0) & (dfd[:Buyer_Pos_P0] .==1) , [:panid]]
+    median_df = median(df_cat_pre[col])
+    col_med1=Symbol(string(col)*"_med1")
+    col_med2=Symbol(string(col)*"_med2")
+    df_cat_pre[col_med1] = abs(df_cat_pre[col]-median_df)
+    MAD=median(df_cat_pre[col_med1])
+    df_cat_pre[col_med2] = (0.6745*(df_cat_pre[col]-median_df))/MAD
+    df_cat_pre_zsc = df_cat_pre[abs(df_cat_pre[col_med2]) .< 3.5,:]
+    df_cat_pre_zsc_1 = df_cat_pre_zsc[:,[:panid]]
+    df_cat_pre_zsc_f = vcat(df_cat_pos,df_cat_pre_zsc_1)
+    #dfd_pout =  join(dfd, df_cat_pre_zsc_f, on =  :panid , kind = :inner);
+    #rows2remove = setdiff(dfd[:panid],df_cat_pre_zsc_f[:panid])
+    #dfd[findin(dfd[:panid],rows2remove),:iso]=true
+    return dfd[findin(dfd[:panid],df_cat_pre_zsc_f[:panid]),:]
+end
+#Pre_3STD_out_v2(dfd,:Prd_0_Net_Pr_PRE,3.5)    
+Pre_3STD_out(dfd::DataFrame,col::Symbol,stddev::Float64) = Pre_3STD_out_v2(dfd,col,stddev)
+Pre_3STD_out(dfd,:Prd_0_Net_Pr_PRE,3.5);
 
-
-function Restrict50Buyers()
+function Restrict50Buyers_v1()
     for (k,v) in Dict(r=>countmap(dfd[(dfd[:iso].==false)&(dfd[:Buyer_Pos_P1].==1), r]) for r in cfg[:random_campaigns])
             lvls=String[]
             for (kl,vl) in v 
@@ -171,8 +252,9 @@ function Restrict50Buyers()
     end
 end
 println("Restrict50Buyers")
-Restrict50Buyers()    
-
+Restrict50Buyers() = Restrict50Buyers_v1() 
+Restrict50Buyers()
+    
 println("MatchMe")       
 function MatchMe(dfd::DataFrame,cfg::OrderedDict)
     df=dfd[dfd[:iso].==false,[:panid,:group,:Buyer_Pre_P1,cfg[:ProScore]]]
@@ -229,12 +311,123 @@ function MatchMe(dfd::DataFrame,cfg::OrderedDict)
     dfd[findin(dfd[:panid],rows2remove),:iso]=true     
     #return dfd[dfd[:iso].==false, : ]  
 end
-MatchMe(dfd,cfg)
+#MatchMe(dfd,cfg)
+    
+"""
+    dfdx[:matchx]=dfdx[:matchS].*dfdx[:conc]    
+    by(dfdx, :matchS, df -> DataFrame(N = size(unique(df[:conc]) )))
+    unique(dfdx[(dfdx[:matchS].=="0~0~011010"),:conc])
+    
+"""
+    
+
+function MatchMe2(dfd::DataFrame,fast::Bool=true)
+    dfdx=dfd[(dfd[:iso].==false),[:group,:panid,:banner,:Trps_PRE_P1,:Trps_PRE_P0,
+              :Buyer_Pre_P0,:Buyer_Pre_P1,
+              :Dol_per_Trip_PRE_P0,:Dol_per_Trip_PRE_P1,cfg[:ProScore]
+            ]]        
+    if typeof(dfdx[:Dol_per_Trip_PRE_P0])!=DataArray{Float64,1} dfdx[:Dol_per_Trip_PRE_P0] = [x in [0,"//N","\\N"] ? 0.0 : parse(Float64,x) for x in Array(dfdx[:Dol_per_Trip_PRE_P0])] end
+    if typeof(dfdx[:Dol_per_Trip_PRE_P1])!=DataArray{Float64,1}  dfdx[:Dol_per_Trip_PRE_P1] = [x in [0,"//N","\\N"] ? 0.0 : parse(Float64,x) for x in Array(dfdx[:Dol_per_Trip_PRE_P1])] end     
+    if typeof(dfdx[:Trps_PRE_P1])!=DataArray{Int64,1}  dfdx[:Trps_PRE_P1] = [x in ["//N","\\N"] ? 0 : parse(Int64,x) for x in Array(dfdx[:Trps_PRE_P1])] end
+    if typeof(dfdx[:Trps_PRE_P0])!=DataArray{Int64,1}  dfdx[:Trps_PRE_P0] = [x in ["//N","\\N"] ? 0 : parse(Int64,x) for x in Array(dfdx[:Trps_PRE_P0])] end        
+    dfdx[(dfdx[:Trps_PRE_P1].>=5),:Trps_PRE_P1] = 5 
+    dfdx[(dfdx[:Trps_PRE_P0].>=10),:Trps_PRE_P0] = 10
+    cols=[:banner,:Trps_PRE_P0,:Trps_PRE_P1,:Buyer_Pre_P0,:Buyer_Pre_P1,:Dol_per_Trip_PRE_P0,:Dol_per_Trip_PRE_P1]
+    if haskey(cfg,:ProScore) cols=vcat([cfg[:ProScore]],cols) end        
+    coll = length(cols)-2
+    q0=nquantile(dfdx[(dfdx[:Buyer_Pre_P0].==1),:Dol_per_Trip_PRE_P0], 10)    
+    q1=nquantile(dfdx[(dfdx[:Buyer_Pre_P1].==1),:Dol_per_Trip_PRE_P1], 5)     
+    genbin(x::Float64,q:: Array{Float64,1}) = for i in 1:length(q)  if x<=q[i] return "<"*string(q[i]); break; end  end 
+    dfdx[:matchS]=[ (row[:Trps_PRE_P0]!=0?genbin(row[:Dol_per_Trip_PRE_P0],q0):"x0")*"~"*(row[:Trps_PRE_P1]!=0?genbin(row[:Dol_per_Trip_PRE_P1],q1):"x1")*"~"*reduce(*,[string(row[i]) for i in 1:coll]) for row in eachrow(dfdx[cols])] 
+       
+        
+    dfid = DataFrame(match = Int64[], panid = Int64[],matchS = String[])
+    if fast==false
+        t=dfdx[(dfdx[:group].==1),[:panid,:matchS]]
+        c=dfdx[(dfdx[:group].==0),[:panid,:matchS]]
+        for row in eachrow(t)
+            d = c[(c[:matchS].==row[:matchS]),:] 
+            if length(d[1]) > 0
+                cpanid=d[1,1]
+                cmatchS=d[1,2]
+                println("found control panid : $cpanid ::  ",row[:panid]," ~ ",row[:matchS])
+                dfid=vcat(dfid,DataFrame(match=[0,row[:panid]],
+                                             panid=[row[:panid], cpanid  ],
+                                             matchS=[row[:matchS], cmatchS]
+                                            )
+                             )
+                c[(c[:panid].==cpanid),:matchS] = "used"   
+            else
+                println("NOTHING FOUND FOR exposed panid : ",row[:panid]," ~ ",row[:matchS])
+                dfid=vcat(dfid,DataFrame(match=[-1],
+                                             panid=[row[:panid]  ],
+                                             matchS=[row[:matchS]]
+                                            )
+                             )
+            end    
+        end
+            
+    else
+        dfdx=dfdx[[:panid,:group,:matchS]]
+        dfc=join( by(dfdx[(dfdx[:group].==1),[:panid,:matchS]] ,:matchS, df-> DataFrame(N1=size(df,1))) , 
+              by(dfdx[(dfdx[:group].==0),[:panid,:matchS]] ,:matchS, df-> DataFrame(N0=size(df,1)))  , 
+              on = :matchS, kind = :left
+            )
+        dfc[isna(dfc[:N0]),:N0]=0
+        dfc[:miss] = 0 
+        dfc[((dfc[:N0]-dfc[:N1]).<0),:miss] = dfc[((dfc[:N0]-dfc[:N1]).<0),:N1] - dfc[((dfc[:N0]-dfc[:N1]).<0),:N0]
+        dfc[:finalcnt] = dfc[:N1] - dfc[:miss]
+        x=0
+        for df in groupby(   dfdx[findin(dfdx[:matchS],dfc[(dfc[:finalcnt].>0),:matchS]),:], :matchS   )
+            x+=1
+            len=dfc[(dfc[:finalcnt].>0),:finalcnt][x]
+            dfid=vcat(dfid,DataFrame(match=df[(df[:group].==1),:panid][1:len],
+                                     panid=df[(df[:group].==0),:panid][1:len],
+                                     matchS=[dfc[(dfc[:finalcnt].>0),:matchS][x] for i in 1:len]
+                                    )
+                     )
+        end 
+        expd=dfdx[(dfdx[:group].==1),[:panid,:matchS]]
+        expd[:match] = -1
+        expd[findin(expd[:panid],dfid[:match]),:match]=0
+        dfid = vcat(dfid,expd[[:match,:panid, :matchS]])
+    end
+    
+    return dfid    
+end        
+#matchids=MatchMe2(dfd)  
+#lowercase!(dfd)
+#cfg=lowercase(cfg)
+#dfd=join(dfd[lowercase(DSvars)],matchids,on=[:panid])   
+#dfd=dfd[setdiff(names(dfd),[:match,:matchS,:matchs])]
+    
+"""
+using HypothesisTests
+ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:buyer_pre_p0],  dfd[(dfd[:group].==1),:buyer_pre_p0] )   
+ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:buyer_pre_p1],  dfd[(dfd[:group].==1),:buyer_pre_p1] )   
+#ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:dol_per_trip_pre_p0],  dfd[(dfd[:group].==1),:dol_per_trip_pre_p0] )   
+ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:dol_per_trip_pre_p1],  dfd[(dfd[:group].==1),:dol_per_trip_pre_p1] )   
+#ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:trps_pre_p0],  dfd[(dfd[:group].==1),:trps_pre_p0] )   
+ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:trps_pre_p1],  dfd[(dfd[:group].==1),:trps_pre_p1] )   
+#ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:banner],  dfd[(dfd[:group].==1),:banner] )   
+""" 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
 println("filter DFD")
 lowercase!(dfd)
 cfg=lowercase(cfg)
 dfd=dfd[dfd[:iso].==false, lowercase(DSvars) ] 
+    
+#dfd=dfd[lowercase(DSvars) ]     
     
 iocc = Dict(:modelName=>:occ, :raneff=>cfg[:random_campaigns], :y_var=>:trps_pos_p1, :logvar=>:LOG_trps_pre_p1, :logvarOrig=>:trps_pre_p1 )
 idolocc = Dict(:modelName=>:dolocc, :raneff=>cfg[:random_campaigns], :y_var=>:dol_per_trip_pos_p1, :logvar=>:LOG_dol_per_trip_pre_p1, :logvarOrig=>:dol_per_trip_pre_p1)
@@ -249,11 +442,19 @@ function genExcludeVars!(iocc::Dict,idolocc::Dict,ipen::Dict)
 end
 genExcludeVars!(iocc,idolocc,ipen)
 
-    
+factor_cols=vcat( [ cfg[:proscore], :group, :panid], cfg[:allrandoms] )
+for c in setdiff(factor_cols,[:panid, cfg[:proscore]]) 
+    if !( typeof(dfd[c]) in [  DataArray{String,1}  ]) 
+        println("converting to Strings : ", c," of type : ",typeof(dfd[c]))
+        dfd[c] = map(x->string(x),dfd[c])
+        dfd[c] = convert(Array{String},dfd[c]) 
+    end
+end
+poolit!(dfd,factor_cols)   
     
     
 println("featureSelection")
-function featureSelection(dfd::DataFrame, m::Dict)
+function featureSelection_v1(dfd::DataFrame, m::Dict)
     function rmVars(v::DataArray{Any}) rmVars(convert(Array{Symbol},v)) end
     function rmVars(v::Array{Any}) rmVars(convert(Array{Symbol},v)) end
     function rmVars(v::Array{Symbol})
@@ -334,17 +535,9 @@ function featureSelection(dfd::DataFrame, m::Dict)
     finalvars = convert(Array{Symbol},vcat(finalvars,[:group]) )
     return finalvars
 end
-     
+    
+featureSelection(dfd::DataFrame, m::Dict) = featureSelection_v1(dfd,m)
 
-factor_cols=vcat( [ cfg[:proscore], :group, :panid], cfg[:allrandoms] )
-for c in setdiff(factor_cols,[:panid, cfg[:proscore]]) 
-    if !( typeof(dfd[c]) in [  DataArray{String,1}  ]) 
-        println("converting to Strings : ", c," of type : ",typeof(dfd[c]))
-        dfd[c] = map(x->string(x),dfd[c])
-        dfd[c] = convert(Array{String},dfd[c]) 
-    end
-end
-poolit!(dfd,factor_cols)
 
 iocc[:finalvars] = featureSelection(dfd[(dfd[:buyer_pos_p1].==1),:], expandM(iocc))
 idolocc[:finalvars]   = featureSelection(dfd[(dfd[:buyer_pos_p1].==1),:], expandM(idolocc))
@@ -394,7 +587,7 @@ cols = unique(vcat(cols,[:buyer_pre_p1, :buyer_pos_p1, :trps_pos_p1,:trps_pre_p1
     
    
 
-function scaleTestControl(dfd::DataFrame) 
+function scaleTestControl_v1(dfd::DataFrame) 
         tst=mean(dfd[((dfd[:group].=="1")|(dfd[:group].==1))&(dfd[:buyer_pre_p1].==1),modelsDict[:dolocc][:logvarOrig]])
         ctrl=mean(dfd[((dfd[:group].=="0")|(dfd[:group].==0))&(dfd[:buyer_pre_p1].==1),modelsDict[:dolocc][:logvarOrig]])
         f=(tst/ctrl)
@@ -409,10 +602,11 @@ function scaleTestControl(dfd::DataFrame)
         dfd[(dfd[:group].=="0")|(dfd[:group].==0),modelsDict[:occ][:y_var]] = Int64.(round.(dfd[(dfd[:group].=="0")|(dfd[:group].==0),modelsDict[:occ][:y_var]] .* o_f))
         dfd[((dfd[:group].=="0")|(dfd[:group].==0)),modelsDict[:occ][:logvarOrig]] = Int64.(round.(dfd[((dfd[:group].=="0")|(dfd[:group].==0)),modelsDict[:occ][:logvarOrig]] .* o_f))
 end    
-scaleTestControl(dfd) 
-        
+scaleTestControl(dfd::DataFrame) = scaleTestControl_v1(dfd) 
+scaleTestControl(dfd)
+    
 #modelsDict = read_modelsDict(root)
-function removeBreakswithFewLevels(dfd::DataFrame,modelsDict::Dict)
+function removeBreakswithFewLevels_v1(dfd::DataFrame,modelsDict::Dict)
     modelsDict[:excludedBreaks]=Symbol[]
     for r in cfg[:random_campaigns]
         if length(setdiff(levels(dfd[r]),["none"])) < 2
@@ -426,6 +620,7 @@ function removeBreakswithFewLevels(dfd::DataFrame,modelsDict::Dict)
         end
     end
 end
+removeBreakswithFewLevels(dfd::DataFrame,modelsDict::Dict) = removeBreakswithFewLevels_v1(dfd,modelsDict)
 removeBreakswithFewLevels(dfd,modelsDict)
     
 save_dfd(root, dfd[cols] )
@@ -498,8 +693,8 @@ modelsDict = read_modelsDict(root) #modelsDict = readModels(jmod_fname)
 
 @everywhere function runGlm(root::String, modelname::Symbol, ranef::Symbol=:empty)
     println("Loding data : ")
-    dfd = read_dfd(root) #dfd = readtable(mod_fname,header=true);
-    modelsDict = read_modelsDict(root)#modelsDict = readModels(jmod_fname)
+    dfd = read_dfd(root) 
+    modelsDict = read_modelsDict(root)
     poolit!(dfd,modelsDict[:factors])
     m=modelsDict[modelname]
     return runGlm(dfd, m, ranef)
@@ -525,11 +720,9 @@ end
         
 @everywhere function runGlmm(root::String, modelname::Symbol, ranef::Symbol=:empty, runθ::Bool=true)
     println("Loding data : Glmm : ",modelname," ~~~ ",ranef)
-    dfd = read_dfd(root)   #dfd = readtable(mod_fname,header=true);
-    modelsDict = read_modelsDict(root) #modelsDict = readModels(jmod_fname)
-#println("Poolit : Pre")
+    dfd = read_dfd(root)   
+    modelsDict = read_modelsDict(root) 
     poolit!(dfd,modelsDict[:factors])
-#println("Poolit : Pos")
     m=modelsDict[modelname]
     if ranef==:empty
         v_out=Dict()
@@ -544,13 +737,10 @@ end
 
 @everywhere function runGlmm(dfd::DataFrame,m::Dict, ranef::Array{Symbol}=[:empty], runθ::Bool=true)
     ranef = ranef==[:empty] ? m[:raneff]  : ranef
-#println("runglmm : ",ranef)
     for r in ranef
         dfd[r] = relevel(dfd[r], "none")
     end
-#println("runglmm2 : ",ranef)
     f=genF(m[:y_var],setdiff(m[:finalvars],[:group]),ranef)
-#println("\n\n GMT \n  ",f," ",m[:modelName]," \n\n\n")
     cols = convert(Array{Symbol},vcat(m[:finalvars], [m[:y_var], m[:logvar]], ranef ))
     println("Ok - Running ",m[:modelName]," - ",ranef," Glmm on proc ",myid()," with : ",f)
     if m[:Buyer_Pos_P1_is1]
@@ -567,7 +757,7 @@ end
 end
     
 #dx=OrderedDict()  # defaults to empty - so that consolidate will work with seq or MP
-function runModels(root::String, modelsDict::Dict)
+function runModels_v1(root::String, modelsDict::Dict)
     dfd = read_dfd(root) #dfd = readtable(mod_fname,header=true);
     poolit!(dfd,modelsDict[:factors])
     res = OrderedDict()
@@ -593,7 +783,8 @@ function runModels(root::String, modelsDict::Dict)
         res[covg] = runGlm(dfd,modelsDict[m], ml[i,:][2])   #res[covg] = runGlm(mod_fname, jmod_fname, ml[i,:][1], ml[i,:][2]) 
     end 
     return res                        
-end         
+end       
+runModels(root::String, modelsDict::Dict) = runModels_v1(root,modelsDict) 
 #dx = runModels(root,modelsDict)       
     
     
@@ -627,7 +818,7 @@ end
 dx=(isdefined(:MP))&(MP)?(MPrunModels(root,modelsDict);OrderedDict()):runModels(root,modelsDict) 
 
         
-function consolidateResults(modelsDict::Dict,dx::OrderedDict=OrderedDict())  
+function consolidateResults_v1(modelsDict::Dict,dx::OrderedDict=OrderedDict())  
   sdf = DataFrame(parameter=String[], coef=Int64[], stderr=Int64[], zval=Int64[], pval=Int64[], model=String[], ranef=String[], modelType=String[])
     for m in [:occ, :dolocc, :pen]
         g = length(dx) > 0 ? dx[Symbol("glm_"*string(m))] : getw( Symbol("glm_"*string(m)) )  
@@ -664,7 +855,10 @@ function consolidateResults(modelsDict::Dict,dx::OrderedDict=OrderedDict())
     end
     return sdf
 end     
+consolidateResults(modelsDict::Dict,dx::OrderedDict=OrderedDict()) = consolidateResults_v1(modelsDict,dx)   
 dfx = consolidateResults(modelsDict,dx)  
+        
+        
 save_dfx(root,dfx)      #writetable(root*"/campaign.csv", dfx)                      
 
     
@@ -726,14 +920,13 @@ dfx[:onetail_pval_to_campaign]=0.0
 #dfx[:unadj_mean_score1_eq] = ""
 #dfx[:adj_mean_score0_eq ] = ""
 #dfx[:adj_mean_score1_eq ] = ""
-#dfx[:unadj_avg_expsd_hh_pre_eq]=""
-#dfx[:unadj_avg_expsd_hh_pst_eq]=""
+dfx[:unadj_avg_expsd_hh_pre_eq]=""
+dfx[:unadj_avg_expsd_hh_pst_eq]=""
 #dfx[:unadj_avg_cntrl_hh_pre_eq]=""
 #dfx[:unadj_avg_cntrl_hh_pst_eq]=""
 #dfx[:unadj_avg_cntrl_hh_pre_eq]=""
 #dfx[:unadj_avg_cntrl_hh_pst_eq]=""
 
-# Anonymous functions
 inDFX(c::Symbol) = c in names(dfx)
 mlist = [modelsDict[:occ],modelsDict[:dolocc],modelsDict[:pen]]  # otherwise we'd include modelsDict[:factors]...etc
 Rlist() = by(dfx[(dfx[:modelType].=="GLMM"),[:ranef,:parameter]], [:ranef,:parameter], df -> DataFrame(N = size(df,1)))[[:ranef,:parameter]]
@@ -742,7 +935,7 @@ Rlist() = by(dfx[(dfx[:modelType].=="GLMM"),[:ranef,:parameter]], [:ranef,:param
 #unique(dfx[(dfx[:modelType].=="GLMM")&(dfx[:ranef].=="targeting"),:parameter])
 #hhcnts[(hhcnts[:ranef].=="targeting"),:parameter] 
         
-function adjustDFX(dfx::DataFrame)
+function adjustDFX_v1(dfx::DataFrame)
     dfx[:adj_coef] = 0.0
     dfx[:adj_stderr]=  0.0
     for m in mlist 
@@ -766,6 +959,7 @@ function adjustDFX(dfx::DataFrame)
     dfx[(dfx[:modelType].=="GLMM"),:pval] = 2.0 .* ccdf(Normal(), abs(dfx[(dfx[:modelType].=="GLMM"),:zval]))  
     return dfx
 end
+adjustDFX(dfx::DataFrame) = adjustDFX_v1(dfx)
 dfx = adjustDFX(dfx)
 
 
@@ -2064,6 +2258,8 @@ save_dfr(root, dfr)
 
 #Dong, Zhiyuan
 #pvalue < 0.05 = statistical significance level = reject null hypothesis = and conclude that no matching on trps_pre_p1
+#dfz =  DataFrame(y=rand(Normal(2.35,0.72),1000000),x=rand(Normal(2.35,0.72),1000000))
+#ApproximateTwoSampleKSTest(dfz[:y],dfz[:x])
 function kstest()
     #using HypothesisTests
     ks=ApproximateTwoSampleKSTest(dfd[(dfd[:buyer_pre_p1].==1)&(dfd[:group].==0),:trps_pre_p1],dfd[(dfd[:buyer_pre_p1].==1)&(dfd[:group].==1),:trps_pre_p1])
@@ -2086,10 +2282,11 @@ end
             
             
         
+"""        
+using DataFrames, HypothesisTests
+Dol_per_Trip_PRE_P0
         
-        
-        
-        
+"""        
         
         
         
@@ -2099,130 +2296,135 @@ end
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*- TESt EVAL -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
-function MatchMe2()
-    dfdx=dfd[[:group,:panid,:banner,:Trps_PRE_P1,:Trps_PRE_P0,
+function MatchMe3(dfd::DataFrame)
+    dfdx=dfd[(dfd[:iso].==false),[:group,:panid,:banner,:Trps_PRE_P1,:Trps_PRE_P0,
               :Buyer_Pre_P0,:Buyer_Pre_P1,
-              :Dol_per_Trip_PRE_P0,:Dol_per_Trip_PRE_P1,
-              :Trps_PRE_P1,:Trps_PRE_P0
+              :Dol_per_Trip_PRE_P0,:Dol_per_Trip_PRE_P1,cfg[:ProScore]
             ]]        
-            
     if typeof(dfdx[:Dol_per_Trip_PRE_P0])!=DataArray{Float64,1} dfdx[:Dol_per_Trip_PRE_P0] = [x in [0,"//N","\\N"] ? 0.0 : parse(Float64,x) for x in Array(dfdx[:Dol_per_Trip_PRE_P0])] end
     if typeof(dfdx[:Dol_per_Trip_PRE_P1])!=DataArray{Float64,1}  dfdx[:Dol_per_Trip_PRE_P1] = [x in [0,"//N","\\N"] ? 0.0 : parse(Float64,x) for x in Array(dfdx[:Dol_per_Trip_PRE_P1])] end     
     if typeof(dfdx[:Trps_PRE_P1])!=DataArray{Int64,1}  dfdx[:Trps_PRE_P1] = [x in ["//N","\\N"] ? 0 : parse(Int64,x) for x in Array(dfdx[:Trps_PRE_P1])] end
     if typeof(dfdx[:Trps_PRE_P0])!=DataArray{Int64,1}  dfdx[:Trps_PRE_P0] = [x in ["//N","\\N"] ? 0 : parse(Int64,x) for x in Array(dfdx[:Trps_PRE_P0])] end        
     dfdx[(dfdx[:Trps_PRE_P1].>=5),:Trps_PRE_P1] = 5 
     dfdx[(dfdx[:Trps_PRE_P0].>=10),:Trps_PRE_P0] = 10
-    dfdx[:quartile_spent_preP0] = "0"
-    dfdx[:quartile_spent_preP1] = "0"
-    genbin(x::Float64,q:: Array{Float64,1}) = for i in 1:length(q)  if x<q[i] return "bin"*string(i); break; end  end 
-    bnum=10    
-    dx = sort(dfdx[(dfdx[:Buyer_Pre_P0].==1),:Dol_per_Trip_PRE_P0])
-    q=vcat([dx[i*Int(round(length(dx)/bnum))] for i in 1:bnum-1],dx[end:end][1]+1)   
-    dfdx[(dfdx[:Buyer_Pre_P0].==1),:quartile_spent_preP0] = map(x-> genbin(x,q), dfdx[(dfdx[:Buyer_Pre_P0].==1),:Dol_per_Trip_PRE_P0] )              
-    dx = sort(dfdx[(dfdx[:Buyer_Pre_P1].==1),:Dol_per_Trip_PRE_P1])
-    q=vcat([dx[i*Int(round(length(dx)/bnum))] for i in 1:bnum-1],dx[end:end][1]+1)   
-    dfdx[(dfdx[:Buyer_Pre_P1].==1),:quartile_spent_preP1] = map(x-> genbin(x,q), dfdx[(dfdx[:Buyer_Pre_P1].==1),:Dol_per_Trip_PRE_P1] )              
+    cols=[:banner,:Trps_PRE_P0,:Trps_PRE_P1,:Buyer_Pre_P0,:Buyer_Pre_P1,:Dol_per_Trip_PRE_P0,:Dol_per_Trip_PRE_P1]
+    if haskey(cfg,:ProScore) cols=vcat([cfg[:ProScore]],cols) end                    
+    coll = length(cols)-2
+    q0=nquantile(dfdx[(dfdx[:Buyer_Pre_P0].==1),:Dol_per_Trip_PRE_P0], 10)    
+    q1=nquantile(dfdx[(dfdx[:Buyer_Pre_P1].==1),:Dol_per_Trip_PRE_P1], 5)     
+    genbin(x::Float64,q:: Array{Float64,1}) = for i in 1:length(q)  if x<=q[i] return "<"*string(q[i]); break; end  end 
+    dfdx[:matchS]=[ (row[:Trps_PRE_P0]!=0?genbin(row[:Dol_per_Trip_PRE_P0],q0):"x0")*"~"*(row[:Trps_PRE_P1]!=0?genbin(row[:Dol_per_Trip_PRE_P1],q1):"x1")*"~"*reduce(*,[string(row[i]) for i in 1:coll]) for row in eachrow(dfdx[cols])] 
+    # *********************************************8
         
-    for c in [:banner,:Buyer_Pre_P0,:Buyer_Pre_P1,:Dol_per_Trip_PRE_P0,:Dol_per_Trip_PRE_P1,
-              :Trps_PRE_P1,:Trps_PRE_P0,:quartile_spent_preP0,:quartile_spent_preP1
-             ] 
-        dfdx[c] = map(x->string(x),dfdx[c])
-        dfdx[c] = convert(Array{String},dfdx[c])        
+    t=dfdx[(dfdx[:group].==1),[:panid,:matchS]]
+    c=dfdx[(dfdx[:group].==0),[:panid,:matchS]]
+    dfid = DataFrame(match = Int64[], panid = Int64[],matchS = String[])
+    for row in eachrow(t)
+        d = c[(c[:matchS].==row[:matchS]),:] 
+        if length(d[1]) > 0
+                    cpanid=d[1,1]
+                    cmatchS=d[1,2]
+                    println("found control panid : $cpanid ::  ",row[:panid]," ~ ",row[:matchS])
+                    dfid=vcat(dfid,DataFrame(match=[0,row[:panid]],
+                                             panid=[row[:panid], cpanid  ],
+                                             matchS=[row[:matchS], cmatchS]
+                                            )
+                             )
+                    c[(c[:panid].==cpanid),:matchS] = "used"   
+        else
+                    println("NOTHING FOUND FOR exposed panid : ",row[:panid]," ~ ",row[:matchS])
+                    dfid=vcat(dfid,DataFrame(match=[-1],
+                                             panid=[row[:panid]  ],
+                                             matchS=[row[:matchS]]
+                                            )
+                             )
+        end    
     end
- 
-    dfdx[:match] = "_"
-            geneq(cols::Array{Symbol}) = for c in cols 
-            
-    if !haskey(cfg,:ProScore)         
-        dfdx[(dfdx[:group].==0),:match] = dfdx[(dfdx[:group].==0),:banner]*"_".*dfdx[(dfdx[:group].==0),:Buyer_Pre_P0]*"_".*dfdx[:Trps_PRE_P0]*"_".*dfdx[:Buyer_Pre_P1]*"_".*dfdx[:Trps_PRE_P1]*"_".*dfdx[:quartile_spent_preP0]*"_".*dfdx[:quartile_spent_preP1]
-        dfdx[(dfdx[:group].==1),:match] = dfx[:banner]*"_"*dfdx[:Buyer_Pre_P0]*"_"*dfdx[:Trps_PRE_P0]*"_"*dfdx[:Buyer_Pre_P1]*"_"*dfdx[:Trps_PRE_P1]*"_"*dfdx[:quartile_spent_preP0]*"_"*dfdx[:quartile_spent_preP1]
-    else
-            
-                dfdx[(dfdx[:group].==0),:match] = dfx[:banner,"_",eval(parse(text=ProScore)),"_",Buyer_Pre_P0,"_",Trps_PRE_P0,"_",Buyer_Pre_P1,"_",Trps_PRE_P1,"_",quartile_spent_preP0,"_",quartile_spent_preP1
-                
-       dfdx[(dfdx[:group].==1),:match] = 
-                banner,"_",eval(parse(text=ProScore)),"_",Buyer_Pre_P0,"_",Trps_PRE_P0,"_",Buyer_Pre_P1,"_",Trps_PRE_P1,"_",quartile_spent_preP0,"_",quartile_spent_preP1        
-                
-    end        
             
             
+      QC      
+     for row in eachrow(dfid) 
+        if row[:match]>0  
+                x=dfid[(dfid[:panid].==row[:match]),:matchS][1] 
+                if x!=row[:matchS] 
+                        println("NO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! : ctrl panid : ",row[:panid])
+                else
+                        println("o.k. : ",row[:panid])
+                end 
+        end 
+    end
             
             
-    
-            
+            QC
+            d = c[(c[:matchS].=="x0~x1~830000"),:] 
+            "x0~x1~830000"
+    # **************************************************        
+        
+       dfdx=dfdx[[:panid,:group,:matchS]]
+        
+        dfc=join( by(dfdx[(dfdx[:group].==1),[:panid,:matchS]] ,:matchS, df-> DataFrame(N1=size(df,1))) , 
+              by(dfdx[(dfdx[:group].==0),[:panid,:matchS]] ,:matchS, df-> DataFrame(N0=size(df,1)))  , 
+              on = :matchS, kind = :left
+            )
+        dfc[isna(dfc[:N0]),:N0]=0
+        dfc[:miss] = 0 
+        dfc[((dfc[:N0]-dfc[:N1]).<0),:miss] = dfc[((dfc[:N0]-dfc[:N1]).<0),:N1] - dfc[((dfc[:N0]-dfc[:N1]).<0),:N0]
+        dfc[:finalcnt] = dfc[:N1] - dfc[:miss]
+        
+        
+        
+        dfid = DataFrame(match = Int64[], panid = Int64[],matchS = String[])
+        x=0
+        for df in groupby(   dfdx[findin(dfdx[:matchS],dfc[(dfc[:finalcnt].>0),:matchS]),:], :matchS   )
+            x+=1
+            len=dfc[(dfc[:finalcnt].>0),:finalcnt][x]
+            dfid=vcat(dfid,DataFrame(match=df[(df[:group].==1),:panid][1:len],
+                                     panid=df[(df[:group].==0),:panid][1:len],
+                                     matchS=[dfc[(dfc[:finalcnt].>0),:matchS][x] for i in 1:len]
+                                    )
+                     )
+        end 
+        
+        expd=dfdx[(dfdx[:group].==1),[:panid,:matchS]]
+        expd[:match] = -1
+        expd[findin(expd[:panid],dfid[:match]),:match]=0
+        vcat(dfid,expd[[:match,:panid, :matchS]])
+        
 end        
-MatchMe2()
+matchids=MatchMe3(dfd)  
+lowercase!(dfd)
+cfg=lowercase(cfg)
+dfd=join(dfd[lowercase(DSvars)],matchids,on=[:panid])
 
-
-
+    
+dfd=dfd[setdiff(names(dfd),[:match,:matchS])]
+    
+"""
+using HypothesisTests
+ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:buyer_pre_p0],  dfd[(dfd[:group].==1),:buyer_pre_p0] )   
+ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:buyer_pre_p1],  dfd[(dfd[:group].==1),:buyer_pre_p1] )   
+#ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:dol_per_trip_pre_p0],  dfd[(dfd[:group].==1),:dol_per_trip_pre_p0] )   
+ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:dol_per_trip_pre_p1],  dfd[(dfd[:group].==1),:dol_per_trip_pre_p1] )   
+#ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:trps_pre_p0],  dfd[(dfd[:group].==1),:trps_pre_p0] )   
+ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:trps_pre_p1],  dfd[(dfd[:group].==1),:trps_pre_p1] )   
+#ApproximateTwoSampleKSTest( dfd[(dfd[:group].==0),:banner],  dfd[(dfd[:group].==1),:banner] )   
+""" 
+    
         
-        
-        
-        
-        
-# 1-1 MATCHING
-
-dfd[:quartile_spent_preP0] = "0"
-dfd[(dfd[:Buyer_Pre_P0]==1),:quartile_spent_preP0] =  quartile dfd[(Buyer_Pre_P0=="1"), :Dol_per_Trip_PRE_P0 ]
-
-dfd[(dfd[:quartile_spent_preP1] = "0"
-dfd[(dfd[:Buyer_Pre_P1=="1",:quartile_spent_preP1] =  dfd[Buyer_Pre_P1=="1",:Dol_per_Trip_PRE_P1]
+  x=countmap(dfdx[:conc])  
+        z=OrderedDict()
+for (k,v) in x z[k] = OrderedDict(:val=>v, :ass=>unique(dfdx[(dfdx[:conc].==k),:matchS])  ) end
+        NOTE - do the same for each test / ctrl
                 
-
-finaldata[Trps_PRE_P1>=5,Trps_PRE_P1:=5]
-finaldata[Trps_PRE_P0>=10,Trps_PRE_P0:=10]
-        
-        
-        
+                
+for (k,v) in z 
+                    println(length(v[:ass]))                
+end
         
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*- TESt EVAL END -*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 # *-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-        
-        
-        finaldata[,quartile_spent_preP0:="0"]
-finaldata[Buyer_Pre_P0=="1",]$quartile_spent_preP0 <- 
-        with(finaldata[Buyer_Pre_P0=="1",], 
-                                                      cut(Dol_per_Trip_PRE_P0,
-                                                      breaks=quantile(Dol_per_Trip_PRE_P0, probs=seq(0,1, by=0.10), na.rm=TRUE),
-                                                      include.lowest=TRUE))
-
-finaldata[,quartile_spent_preP1:="0"]
-finaldata[Buyer_Pre_P1=="1",]$quartile_spent_preP1 <- with(finaldata[Buyer_Pre_P1=="1",], cut(Dol_per_Trip_PRE_P1,
-                                                                                              breaks=quantile(Dol_per_Trip_PRE_P1, probs=seq(0,1, by=0.20), na.rm=TRUE),
-                                                                                              include.lowest=TRUE))
-
-finaldata[Trps_PRE_P1>=5,Trps_PRE_P1:=5]
-finaldata[Trps_PRE_P0>=10,Trps_PRE_P0:=10]
-
-        
-# ****************************************************
-        
-# 1-1 MATCHING
-start.time <- Sys.time()
-finaldata[,quartile_spent_preP0:="0"]
-finaldata[Buyer_Pre_P0=="1",]$quartile_spent_preP0 <- with(finaldata[Buyer_Pre_P0=="1",], cut(Dol_per_Trip_PRE_P0,
-                                                                                              breaks=quantile(Dol_per_Trip_PRE_P0, probs=seq(0,1, by=0.10), na.rm=TRUE),
-                                                                                              include.lowest=TRUE))
-
-finaldata[,quartile_spent_preP1:="0"]
-finaldata[Buyer_Pre_P1=="1",]$quartile_spent_preP1 <- with(finaldata[Buyer_Pre_P1=="1",], cut(Dol_per_Trip_PRE_P1,
-                                                                                              breaks=quantile(Dol_per_Trip_PRE_P1, probs=seq(0,1, by=0.20), na.rm=TRUE),
-                                                                                              include.lowest=TRUE))
-
-finaldata[Trps_PRE_P1>=5,Trps_PRE_P1:=5]
-finaldata[Trps_PRE_P0>=10,Trps_PRE_P0:=10]
-
-
-control <- finaldata[group=="0",]
-test <- finaldata[group=="1",]
-
-if(length(ProScore)==0){
-  control[,conc:=paste0(banner,"_",Buyer_Pre_P0,"_",Trps_PRE_P0,"_",Buyer_Pre_P1,"_",Trps_PRE_P1,"_",quartile_spent_preP0,"_",quartile_spent_preP1)]
-  test[,conc:=paste0(banner,"_",Buyer_Pre_P0,"_",Trps_PRE_P0,"_",Buyer_Pre_P1,"_",Trps_PRE_P1,"_",quartile_spent_preP0,"_",quartile_spent_preP1)]
-} else {
-  control[,conc:=paste0(banner,"_",eval(parse(text=ProScore)),"_",Buyer_Pre_P0,"_",Trps_PRE_P0,"_",Buyer_Pre_P1,"_",Trps_PRE_P1,"_",quartile_spent_preP0,"_",quartile_spent_preP1)]
-  test[,conc:=paste0(banner,"_",eval(parse(text=ProScore)),"_",Buyer_Pre_P0,"_",Trps_PRE_P0,"_",Buyer_Pre_P1,"_",Trps_PRE_P1,"_",quartile_spent_preP0,"_",quartile_spent_preP1)]
-}
+ """      
 
 control$match <- match(control$conc,test$conc)
 nrow(control[is.na(match),])
@@ -2255,3 +2457,6 @@ ks.test(finaldata[group=="0",]$Trps_PRE_P0,finaldata[group=="1",]$Trps_PRE_P0)
 ks.test(finaldata[group=="0",]$Trps_PRE_P1,finaldata[group=="1",]$Trps_PRE_P1)
 ks.test(finaldata[group=="0",]$banner,finaldata[group=="1",]$banner)
 sink()
+        
+"""
+        
